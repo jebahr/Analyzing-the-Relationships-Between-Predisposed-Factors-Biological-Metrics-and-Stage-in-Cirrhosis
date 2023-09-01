@@ -1,0 +1,799 @@
+---
+title: "S&DS 363 Homework 4"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+date: "March 27th, 2023"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn=-1)
+```
+Names: Dinesh Bojja and Jonah Bahr
+
+S&DS 363: Homework 4 MANOVA
+
+## Libraries:
+```{r}
+library(MASS)
+library(biotools)
+library(klaR)
+library(car)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(ggExtra)
+library(heplots)
+library(ks)
+library(outliers)
+library(stringr)
+library(vegan)
+```
+
+## Preliminaries:
+```{r}
+#color palettes
+colors <- c("#ff2d00",
+            "#66BD63",
+            "#0026ff",
+            "#FDAE61",
+            "#D9EF8B",
+            "#ffc500",
+            "#e800ff",
+            "#00b2ff",
+            "#9700ff",
+            "#7c0a62"
+)
+
+#download dataset
+cirrhosis <- read.csv("cirrhosis.csv", header = TRUE)
+cirrhosis$Status = as.factor(cirrhosis$Status)
+cirrhosis$Drug = as.factor(cirrhosis$Drug)
+cirrhosis$Sex = as.factor(cirrhosis$Sex)
+cirrhosis$Stage = as.factor(cirrhosis$Stage)
+head(cirrhosis)
+names(cirrhosis)
+```
+
+Description of dataset: Cirrhosis is a late stage of scarring of the liver caused by many types of liver diseases and conditions, such as hepatitis and chronic alcoholism. Our data was collected by a Mayo Clinic trial in primary biliary cirrhosis (PBC) of the liver conducted between 1974 and 1984.  In the dataset, we find information on the following attributes for patients with cirrhosis: Status, Drug, Age, Sex, Ascites, Hepatomegaly, Spiders, Edema, Bilirubin, Cholesterol, Albumin, Copper, Alk_Phos, SGOT, Triglycerdies, Platelets, Prothrombin, and Stage.
+
+## Data Transformations and Prerequisites
+
+``` {r}
+#qqplots for raw data
+qqPlot(cirrhosis$Bilirubin, col= colors[factor(cirrhosis$Drug)],pch=16,
+       main = "QQ-Plot for Raw Bilirubin Level Data",
+       ylab = "Bilirubin Level (mg/dl)")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Cholesterol, col= colors[factor(cirrhosis$Drug)],pch=16,
+       main = "QQ-Plot for Raw Cholesterol Data",
+       ylab = "Serum Cholesterol Level (mg/dL)")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Albumin, col= colors[factor(cirrhosis$Drug)],pch=16,
+       main = "QQ-Plot for Raw Albumin Data",
+       ylab = "Albumin Level (gm/dL)")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Copper, col= colors[factor(cirrhosis$Drug)],pch=16,
+       main = "QQ-Plot for Raw Copper Data",
+       ylab = "Urine Copper Level (ug/day)")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Alk_Phos, col= colors[factor(cirrhosis$Drug)],pch=16,
+       main = "QQ-Plot for Raw Alkaline Phosphatase Data",
+       ylab = "Alkaline Phosphatase Level (U/liter)")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$SGOT, col= colors[factor(cirrhosis$Drug)],pch=16,
+       main = "QQ-Plot for Raw SGOT Data",
+       ylab = "SGOT Level (U/mL)")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Tryglicerides, col= colors[factor(cirrhosis$Drug)],pch=16,
+       main = "QQ-Plot for Raw Triglycerides Data",
+       ylab = "Trigliderides Level (mg/dl)")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Platelets, col= colors[factor(cirrhosis$Drug)],pch=16,
+       main = "QQ-Plot for Raw Platelets Data",
+       ylab = "Platelets Level (mL/1000)")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Prothrombin, col= colors[factor(cirrhosis$Drug)],pch=16,
+       main = "QQ-Plot for Raw Prothrombin Data",
+       ylab = "Prothrombin Time (s)")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#chi-square plot for raw data
+cqplot(cirrhosis[cirrhosis$Drug == "D-penicillamine", c("Bilirubin", 
+      "Cholesterol", "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", 
+      "Platelets", "Prothrombin")], 
+      main = "Chi-Square Plot of Raw Data for Treatment Drug")
+cqplot(cirrhosis[cirrhosis$Drug == "Placebo", c("Bilirubin", "Cholesterol", 
+      "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", "Platelets", 
+      "Prothrombin")], 
+      main = "Chi-Square Plot of Raw Data for Placebo")
+cqplot(cirrhosis[cirrhosis$Sex == "F", c("Bilirubin", 
+      "Cholesterol", "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", 
+      "Platelets", "Prothrombin")], 
+      main = "Chi-Square Plot of Raw Data for Females")
+cqplot(cirrhosis[cirrhosis$Sex == "M", c("Bilirubin", 
+      "Cholesterol", "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", 
+      "Platelets", "Prothrombin")], 
+      main = "Chi-Square Plot of Raw Data for Males")
+```
+
+Clearly the data is not multivariate normal, so we must do some transformations to get it in a form that is more conducive to MANOVA.
+
+``` {r}
+#transformations
+cirrhosis2 <- cirrhosis
+cirrhosis2[11] = log(cirrhosis[11])
+cirrhosis2[12] = log(cirrhosis[12])
+cirrhosis2[13] = (cirrhosis[13])^2
+cirrhosis2[14] = log(cirrhosis[14])
+cirrhosis2[15] = log(cirrhosis[15])
+cirrhosis2[16] = log(cirrhosis[16])
+cirrhosis2[17] = log(cirrhosis[17])
+cirrhosis2[19] = log(cirrhosis[19])
+
+#transformed qqplots
+qqPlot(cirrhosis2$Bilirubin, col= colors[factor(cirrhosis2$Drug)],pch=16,
+       main = "QQ-Plot for Transformed Bilirubin Data",
+       ylab = "Bilirubin Level")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Cholesterol, col= colors[factor(cirrhosis2$Drug)],pch=16,
+       main = "QQ-Plot for Transformed Cholestrol Data",
+       ylab = "Serum Cholesterol Level")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Albumin, col= colors[factor(cirrhosis2$Drug)],pch=16,
+       main = "QQ-Plot for Transformed Albumin Data",
+       ylab = "Albumin Level")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Copper, col= colors[factor(cirrhosis2$Drug)],pch=16,
+       main = "QQ-Plot for Transformed Copper Data",
+       ylab = "Urine Copper Level")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Alk_Phos, col= colors[factor(cirrhosis2$Drug)],pch=16,
+       main = "QQ-Plot for Transformed Alkaline Phosphatase Data",
+       ylab = "Alkaline Phosphatase Level")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$SGOT, col= colors[factor(cirrhosis2$Drug)],pch=16,
+       main = "QQ-Plot for Transformed SGOT Data",
+       ylab = "SGOT Level")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Tryglicerides, col= colors[factor(cirrhosis2$Drug)],pch=16,
+       main = "QQ-Plot for Transformed Triglycerides Data",
+       ylab = "Trigliderides Level")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Platelets, col= colors[factor(cirrhosis2$Drug)],pch=16,
+       main = "QQ-Plot for Transformed Platelets Data",
+       ylab = "Platelets Level")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Prothrombin, col= colors[factor(cirrhosis2$Drug)],pch=16,
+       main = "QQ-Plot for Transformed Prothrombin Data",
+       ylab = "Prothrombin Time")
+legend("topleft",
+       legend = c("Treatment Drug", "Placebo"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#transformed chi-square plots
+cqplot(cirrhosis2[cirrhosis2$Drug == "D-penicillamine", c("Bilirubin", 
+      "Cholesterol", "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", 
+      "Platelets", "Prothrombin")], 
+      main = "Transformed Chi-Square Plot for Treatment Drug")
+cqplot(cirrhosis2[cirrhosis2$Drug == "Placebo", c("Bilirubin", "Cholesterol", 
+      "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", "Platelets", 
+      "Prothrombin")], 
+      main = "Transformed Chi-Square Plot for Placebo")
+cqplot(cirrhosis2[cirrhosis2$Sex == "F", c("Bilirubin", "Cholesterol", 
+      "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", "Platelets", 
+      "Prothrombin")], 
+      main = "Transformed Chi-Square Plot for Females")
+cqplot(cirrhosis2[cirrhosis2$Sex == "M", c("Bilirubin", "Cholesterol", 
+      "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", "Platelets", 
+      "Prothrombin")], 
+      main = "Transformed Chi-Square Plot for Males")
+```
+
+For MANOVA, we need to have multivariate normality in all of the populations we are studying. After the transformations, we are much closer to multivariate normality, enough to run the MANOVA tests with some level of accuracy. It is worth noting that there are fewer males than females in the study, which could skew the data when analyzing differences between sexes, as for males, an outlier will have a much larger effect on the mean and the population may not be large enough to decrease the standard deviation significantly to compensate for changes and variability. However, there are enough participants to run the analysis, so we can continue.
+
+``` {r}
+#making one variable for Sex and Drug combined
+cirrhosis2 <- cbind(cirrhosis2, str_c(cirrhosis2$Sex, 
+      substr(cirrhosis2$Drug, 1,1)))
+colnames(cirrhosis2)[21] <- "SDC"
+cirrhosis2$SDC <- as.factor(cirrhosis2$SDC)
+
+#run covariance
+FD_cov <- cov(cirrhosis2[cirrhosis2$SDC == "FD", 11:19])
+print(FD_cov)
+FP_cov <- cov(cirrhosis2[cirrhosis2$SDC == "FP", 11:19])
+print(FP_cov)
+MD_cov <- cov(cirrhosis2[cirrhosis2$SDC == "MD", 11:19])
+print(MD_cov)
+MP_cov <- cov(cirrhosis2[cirrhosis2$SDC == "MP", 11:19])
+print(MP_cov)
+
+print("Box's M-Test")
+boxM(cirrhosis2[,c(11:19)], cirrhosis2$SDC)
+```
+
+By observation, the covariance matrices look relatively similar across the different groups. We can confirm this using Box's M. After running Box's M-statistic for the covariance matrices of all of the continuous response variables (separated by group), we find that there is no statistically significant difference between the covariance matrices between each of the groups, as the p-value (0.3467) is higher than the threshold of 0.05. This means that there is not enough evidence to conclude that the multivariate distributions of the different groups separated by drug and sex are different from each other, which allows us to  conduct a MANOVA.
+
+```{r}
+boxplot(cirrhosis2$Bilirubin ~ Drug*Sex, data=cirrhosis2, 
+        col = colors, horizontal = T,
+        cex.axis = 0.50,
+        main = "Bilirubin Levels Separated by Combination of Drug and Sex",
+        xlab = "Level of Serum Bilirubin",
+        ylab = "Drug and Sex (Drug.Sex)")
+boxplot(cirrhosis2$Cholesterol ~ Drug*Sex, data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        cex.axis = 0.50,
+        main = "Cholestrol Levels Separated by Combination of Drug and Sex",
+        xlab = "Level of Serum Cholestrol",
+        ylab = "Drug and Sex (Drug.Sex)")
+boxplot(cirrhosis2$Albumin ~ Drug*Sex, data=cirrhosis2, 
+        col = colors, horizontal = T,
+        cex.axis = 0.50,
+        main = "Albumin Levels Separated by Combination of Drug and Sex",
+        xlab = "Level of Serum Albumin",
+        ylab = "Drug and Sex (Drug.Sex)")
+boxplot(cirrhosis2$Copper ~ Drug*Sex, data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        cex.axis = 0.50,
+        main = "Copper Levels Separated by Combination of Drug and Sex",
+        xlab = "Level of Urine Copper",
+        ylab = "Drug and Sex (Drug.Sex)")
+boxplot(cirrhosis2$Alk_Phos ~ Drug*Sex, data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        cex.axis = 0.50,
+        main = "Alk. Phosph. Levels Separated by Combination of Drug and Sex",
+        xlab = "Level of Alkaline Phosphatase",
+        ylab = "Drug and Sex (Drug.Sex)")
+boxplot(cirrhosis2$SGOT ~ Drug*Sex, data=cirrhosis2, 
+        col = colors, horizontal = T,
+        cex.axis = 0.50,
+        main = "SGOT Levels Separated by Combination of Drug and Sex",
+        xlab = "Level of SGOT",
+        ylab = "Drug and Sex (Drug.Sex)")
+boxplot(cirrhosis2$Tryglicerides ~ Drug*Sex, data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        cex.axis = 0.50,
+        main = "Triglyceride Levels Separated by Combination of Drug and Sex",
+        xlab = "Level of Triglycerides",
+        ylab = "Drug and Sex (Drug.Sex)")
+boxplot(cirrhosis2$Platelets ~ Drug*Sex, data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        cex.axis = 0.50,
+        main = "Platelet Levels Separated by Combination of Drug and Sex",
+        xlab = "Level of Platelets",
+        ylab = "Drug and Sex (Drug.Sex)")
+boxplot(cirrhosis2$Prothrombin ~ Drug*Sex, data=cirrhosis2, 
+        col = colors, horizontal = T,
+        cex.axis = 0.50,
+        main = "Prothrombin Time Separated by Combination of Drug and Sex",
+        xlab = "Prothrombin Time",
+        ylab = "Drug and Sex (Drug.Sex)")
+```
+
+After creating boxplots for each of the continuous variables stratified by their sex and whether they use the treatment drug or placebo, we can see that some of the groups have significant overlap, which suggests that there are no significant differences between their means for between each of the groups. Considering that there is a large number of continuous variables used in this dataset, it may be worthwhile to remove such overlapping variables before running MANOVA, as it may confound any significant results from the other more differentiated variables.
+
+In particular, the boxplots for SGOT levels and Platelet levels seem to overlap quite a bit across all of the groups, to the point where their inclusion may not contribute anything worthwhile to the analysis. Hence, when it comes time to run the MANOVA and further tests, we will opt to exclude them from the analysis. 
+
+## Question 1
+``` {r}
+interaction.plot(cirrhosis2$Sex, cirrhosis2$Drug, cirrhosis2$Bilirubin,
+  lwd = 3, col = c("red", "blue", "black"), trace.label = "Drug",
+  xlab = "Sex", 
+  main = "Interaction Plot for Bilirubin",
+  ylab = "Mean for Bilirubin Level")
+interaction.plot(cirrhosis2$Sex, cirrhosis2$Drug, cirrhosis2$Cholesterol,
+  lwd = 3, col = c("red", "blue", "black"), trace.label = "Drug", 
+  xlab = "Sex", 
+  main = "Interaction Plot for Cholesterol",
+  ylab = "Mean for Serum Cholestrol Level")
+interaction.plot(cirrhosis2$Sex, cirrhosis2$Drug, cirrhosis2$Albumin,
+  lwd = 3, col = c("red", "blue", "black"), trace.label = "Drug", 
+  xlab = "Sex", 
+  main = "Interaction Plot for Albumin",
+  ylab = "Mean for Albumin Level")
+interaction.plot(cirrhosis2$Sex, cirrhosis2$Drug, cirrhosis2$Copper,
+  lwd = 3, col = c("red", "blue", "black"), trace.label = "Drug", 
+  xlab = "Sex", 
+  main = "Interaction Plot for Copper",
+  ylab = "Mean for Urine Copper Level")
+interaction.plot(cirrhosis2$Sex, cirrhosis2$Drug, cirrhosis2$Alk_Phos,
+  lwd = 3, col = c("red", "blue", "black"), trace.label = "Drug", 
+  xlab = "Sex", 
+  main = "Interaction Plot for Alkaline Phosphatase",
+  ylab = "Mean for Alkaline Phosphatase Level")
+interaction.plot(cirrhosis2$Sex, cirrhosis2$Drug, cirrhosis2$SGOT,
+  lwd = 3, col = c("red", "blue", "black"), trace.label = "Drug", 
+  xlab = "Sex", 
+  main = "Interaction Plot for SGOT",
+  ylab = "Mean for SGOT Level")
+interaction.plot(cirrhosis2$Sex, cirrhosis2$Drug, cirrhosis2$Tryglicerides,
+  lwd = 3, col = c("red", "blue", "black"), trace.label = "Drug", 
+  xlab = "Sex", 
+  main = "Interaction Plot for Triglicerides",
+  ylab = "Mean for Triglycerides Level")
+interaction.plot(cirrhosis2$Sex, cirrhosis2$Drug, cirrhosis2$Platelets,
+  lwd = 3, col = c("red", "blue", "black"), trace.label = "Drug", 
+  xlab = "Sex", 
+  main = "Interaction Plot for Platelets",
+  ylab = "Mean for Plateles Level")
+interaction.plot(cirrhosis2$Sex, cirrhosis2$Drug, cirrhosis2$Prothrombin,
+  lwd = 3, col = c("red", "blue", "black"), trace.label = "Drug", 
+  xlab = "Sex", 
+  main = "Interaction Plot for Prothrombin",
+  ylab = "Mean for Prothrombin Time")
+```
+
+Note: We tried fixing the legends on the pdf, but to no avail. They worked perfectly on RStudio, but none of the TAs seemed to be able to help with getting them to not overflow off of the graph boundaries.
+
+We created an interaction plot for each of the continuous response variables used in the analysis, separating them by sex and treatment drug status (placebo or treatment). Since there are only two groups for each of the categorical variables that are used to separate the groups, it is more likely than not that if there is a significant interaction between treatment drug status and sex for each continuous response variable, there will be an intersection (or at the very least opposite slopes) between the lines for D-penicillamine (the treatment drug) and the Placebo as they move between males and females. 
+
+First, for Bilirubin, Albumin, and Copper, there seems to be a statistically significant interaction between the sex and treatment drug status, as proven by the intersection of the lines. Although all three of these variables are increasing when jumping from  females to males in both groups, there seems to be a similar trend: while for females, people who are on the placebo tend to have higher levels of each of these compounds than people who are on the treatment drug, when it comes to males, people who are on the treatment drug tend to have a higher level of the respective compound than those on the placebo. This is suggestive of some interaction between sex and treatment drug status on the level of each of these three compounds.
+
+Cholesterol, Alkaline Phosphatase, SGOT, and Triglycerides also seem to have statistically significant interactions between sex and treatment drug status due to the intersection between the lines. This time, even though the trend that females have a higher level of the compound for people on the placebo than those on the treatment drug (and males have the opposite) is still true, the slopes of each of the lines are now also different. For the placebo, females have higher levels than males, while for treatments, it is the opposite. This also is suggestive of an interaction between sex and treatment drug status on the level of each of these compounds.
+
+Finally, for Platelets and Prothrombin, the slopes are the same for each of the lines and they do not intersect. While they are not perfectly parallel, there is likely not a statistically significant interaction between sex and treatment drug status that affects these continuous variables. Hence, in accordance with the need to reduce the number of continuous response variables, we will opt to remove both Platelets and Prothrombin from MANOVA and other associated tests for the remainder of this assignment, to make sure that there is no masking of statistically significant results by these variables.
+
+``` {r}
+cirrhosis3 <- cirrhosis2[c(4:6, 11:15, 17, 21)]
+
+cqplot(cirrhosis3[cirrhosis3$Drug == "D-penicillamine", c("Bilirubin", 
+      "Cholesterol", "Albumin", "Copper", "Alk_Phos", "Tryglicerides")], 
+      main = "Chi-Square Plot for Treatment Drug After Variable Removal")
+cqplot(cirrhosis3[cirrhosis3$Drug == "Placebo", c("Bilirubin", "Cholesterol", 
+      "Albumin", "Copper", "Alk_Phos", "Tryglicerides")],
+      main = "Chi-Square Plot for Placebo After Variable Removal")
+cqplot(cirrhosis3[cirrhosis3$Sex == "F", c("Bilirubin", "Cholesterol", 
+      "Albumin", "Copper", "Alk_Phos", "Tryglicerides")], 
+      main = "Chi-Square Plot for Females After Variable Removal")
+cqplot(cirrhosis3[cirrhosis3$Sex == "M", c("Bilirubin", "Cholesterol", 
+      "Albumin", "Copper", "Alk_Phos", "Tryglicerides")], 
+      main = "Chi-Square Plot for Males After Variable Removal")
+
+print("Box's M-Test")
+boxM(cirrhosis2[,c(11:19)], cirrhosis2$SDC)
+```
+
+After variable removal, the prerequisites still seem to hold up, as the groups are close to multivariate normality in the Chi-square plots, and since the Box M-statistic is 0.3467, we still fail to reject the null hypothesis that the groups are the same. Thus, we can still continue with MANOVA.
+
+## Question 2
+``` {r}
+#two-way MANOVA model with an interaction between Drug and Sex
+options(contrasts = c("contr.treatment", "contr.poly"))
+cirrMAOV <- lm(cbind(Bilirubin, Cholesterol, Albumin, Copper, Alk_Phos, 
+      Tryglicerides) ~ Drug*Sex, data = cirrhosis3)
+
+#univariate results
+Anova(lm(Bilirubin ~ Drug*Sex, data = cirrhosis3), type = 3)
+Anova(lm(Cholesterol ~ Drug*Sex, data = cirrhosis3), type = 3)
+Anova(lm(Albumin ~ Drug*Sex, data = cirrhosis3), type = 3)
+Anova(lm(Copper ~ Drug*Sex, data = cirrhosis3), type = 3)
+Anova(lm(Alk_Phos ~ Drug*Sex, data = cirrhosis3), type = 3)
+Anova(lm(Tryglicerides ~ Drug*Sex, data = cirrhosis3), type = 3)
+
+#multivariate results
+summary(Anova(cirrMAOV, type = 3))
+```
+First, we can look at the univariate results for each response variable:
+
+Bilirubin. There are no statistically significant differences in serum bilirubin levels between people who took treatment or placebo drugs, nor was there a statistically significant difference between males and females (p-value = 0.4525, 0.1189, respectively). Since both of these p-values are above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between groups in their serum bilirubin levels. There is also no statistically significant interaction between treatment drug status and sex for serum bilirubin levels, as the p-value is 0.4663. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+
+
+Cholesterol. There are no statistically significant differences in serum cholesterol levels between people who took treatment or placebo drugs, nor was there a statistically significant difference between males and females (p-value = 0.6143, 0.2439, respectively). Since both of these p-values are above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between groups in their serum cholesterol levels. There is also no statistically significant interaction between treatment drug status and sex for serum cholesterol levels, as the p-value is 0.0767. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Albumin. There are no statistically significant differences in albumin levels between people who took treatment or placebo drugs, nor was there a statistically significant difference between males and females (p-value = 0.3271, 0.1571, respectively). Since both of these p-values are above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between groups in their albumin levels. There is also no statistically significant interaction between treatment drug status and sex for albumin levels, as the p-value is 0.5971. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Copper. There are no statistically significant differences in urine copper levels between people who took treatment or placebo drugs (p-value = 0.62343). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between treatment/placebo groups in their urine copper levels. However, there is a statistically significant difference between males and females (p-value = 2.813e-05). Since this is far below the 0.05 threshold, we reject the null hypothesis that there is no difference in urine copper levels between males and females, suggesting that there is a real difference between sexes. There is also no statistically significant interaction between treatment drug status and sex for urine copper levels, as the p-value is 0.09859. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Alkaline Phosphatase. There are no statistically significant differences in alkaline phosphatase levels between people who took treatment or placebo drugs, nor was there a statistically significant difference between males and females (p-value = 0.6272, 0.3470, respectively). Since both of these p-values are above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between groups in their alkaline phosphatase levels. There is also no statistically significant interaction between treatment drug status and sex for alkaline phosphatase levels, as the p-value is 0.1680. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Triglycerides. There are no statistically significant differences in triglyceride levels between people who took treatment or placebo drugs (p-value = 0.15626). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between treatment/placebo groups in their triglyceride levels. However, there is a statistically significant difference between males and females (p-value = 0.02625). Since this is far below the 0.05 threshold, we reject the null hypothesis that there is no difference in triglyceride levels between males and females, suggesting that there is a real difference between sexes. There is also no statistically significant interaction between treatment drug status and sex for triglyceride levels, as the p-value is 0.06737. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Next, we can take a look at the multivariate results. 
+
+When looking at the multivariate results, we find that there is a statistically significant difference between sexes, as all of the multivariate statistics are significant (Pillai Trace, Wilks' Lambda, Hotelling's Trace, and Roy's Largest Root: p-value = 0.00015999). Since these values are all less than the threshold of 0.05, we can reject the null hypothesis and show significance. Pillai's Trace and Wilks' Lambda both tell us that a significant amount of the variability in the multivariate responses can be explained by group membership. Roy's Largest Root also tells us that one direction in multivariate space can be used to show the differences between groups.
+
+Alternatively, there does not seem to be a statistically significant difference between people who are on the placebo and people who are using the treatment drug, as all of the multivariate statistics are not significant (Pillai Trace, Wilks' Lambda, Hotelling's Trace, and Roy's Largest Root: p-value = 0.69323). Since these values are all greater than the threshold of 0.05, we fail to reject the null hypothesis.
+
+There also does not seem to be a statistically significant interaction between treatment drug status and sex, as none of the multivariate statistics are significant either (Pillai Trace, Wilks' Lambda, Hotelling's Trace, and Roy's Largest Root: p-value = 0.23321). Since these values are all greater than the threshold of 0.05, we fail to reject the null hypothesis.
+
+## Question 3
+``` {r}
+options(contrasts = c("contr.treatment", "contr.poly"))
+
+contrasts(cirrhosis3$SDC)
+levels(cirrhosis3$SDC)
+
+#Fit one way MANOVA model
+cirrMAOV2 <- lm(cbind(Bilirubin, Cholesterol, Albumin, Copper, Alk_Phos, 
+      Tryglicerides) ~ SDC, data = cirrhosis3)
+
+#Fit one way ANOVA model for all Continuous Variables
+cirrBili <- lm(Bilirubin ~ SDC, data = cirrhosis3)
+cirrChol <- lm(Cholesterol ~ SDC, data = cirrhosis3)
+cirrAlbu <- lm(Albumin ~ SDC, data = cirrhosis3)
+cirrCopp <- lm(Copper ~ SDC, data = cirrhosis3)
+cirrAlk <- lm(Alk_Phos ~ SDC, data = cirrhosis3)
+cirrTryg <- lm(Tryglicerides ~ SDC, data = cirrhosis3)
+
+summary(Anova(cirrMAOV2, type = 3), univariate = T)
+summary(Anova(cirrBili, type = 3), univariate = T)
+summary(Anova(cirrChol, type = 3), univariate = T)
+summary(Anova(cirrAlbu, type = 3), univariate = T)
+summary(Anova(cirrCopp, type = 3), univariate = T)
+summary(Anova(cirrAlk, type = 3), univariate = T)
+summary(Anova(cirrTryg, type = 3), univariate = T)
+
+#multivariate contrast for female vs male
+print("Multivariate Contrast for Sex")
+linearHypothesis(cirrMAOV2, "SDCFP - SDCMD - SDCMP = 0")
+
+#multivariate contrast for placebo vs treatment drug
+print("Multivariate Contrast for Treatment Drug Status")
+linearHypothesis(cirrMAOV2, "- SDCFP + SDCMD - SDCMP = 0")
+
+#univariate contrasts for female vs male
+print("Univariate Contrasts for Sex")
+linearHypothesis(cirrBili, "SDCFP - SDCMD - SDCMP = 0")
+linearHypothesis(cirrChol, "SDCFP - SDCMD - SDCMP = 0")
+linearHypothesis(cirrAlbu, "SDCFP - SDCMD - SDCMP = 0")
+linearHypothesis(cirrCopp, "SDCFP - SDCMD - SDCMP = 0")
+linearHypothesis(cirrAlk, "SDCFP - SDCMD - SDCMP = 0")
+linearHypothesis(cirrTryg, "SDCFP - SDCMD - SDCMP = 0")
+
+#univariate contrasts for placebo vs treatment drug
+print("Univariate Contrasts for Treatment Drug Status")
+linearHypothesis(cirrBili, "- SDCFP + SDCMD - SDCMP = 0")
+linearHypothesis(cirrChol, "- SDCFP + SDCMD - SDCMP = 0")
+linearHypothesis(cirrAlbu, "- SDCFP + SDCMD - SDCMP = 0")
+linearHypothesis(cirrCopp, "- SDCFP + SDCMD - SDCMP = 0")
+linearHypothesis(cirrAlk, "- SDCFP + SDCMD - SDCMP = 0")
+linearHypothesis(cirrTryg, "- SDCFP + SDCMD - SDCMP = 0")
+```
+One thing to note about the contrast analysis for this dataset is that since there are only two different factors in each of the two groups being analyzed, the results are (for the most part) not unique compared to the results from MANOVA. This is because the contrasts here can only compare between the two factors that were already differentiated in the MANOVA test.
+
+First, we can start with the multivariate contrasts.
+
+We find that there is a statistically significant difference between sexes, as all of the multivariate statistics are significant (Pillai Trace, Wilks' Lambda, Hotelling's Trace, and Roy's Largest Root: p-value = 0.0007617). Since these values are all less than the threshold of 0.05, we can reject the null hypothesis, suggesting that there is a statistically significant difference between the sexes.
+
+Alternatively, there does not seem to be a statistically significant difference between people who are on the placebo and people who are using the treatment drug, as none of the multivariate statistics are significant (Pillai Trace, Wilks' Lambda, Hotelling's Trace, and Roy's Largest Root: p-value = 0.54372). Since these values are all greater than the threshold of 0.05, we fail to reject the null hypothesis.
+
+Then, we can look at the univariate contrasts between sexes for each continuous response variable.
+
+Bilirubin. There is no statistically significant difference in serum bilirubin levels between male and females (p-value = 0.1915). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their serum bilirubin levels. 
+
+Cholesterol. There is no statistically significant difference in serum cholesterol levels between male and females (p-value = 0.7991). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their serum cholesterol levels. 
+
+Albumin. There is no statistically significant difference in albumin levels between male and females (p-value = 0.1878). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their albumin levels. 
+
+Copper. There is a statistically significant difference in urine copper levels between male and females (p-value = 0.0001229). Since this p-value is below the threshold of 0.05, we reject the null hypothesis that there is no difference between sexes in their urine copper levels. 
+
+Alkaline Phosphatase. There is no statistically significant difference in alkaline phosphatase levels between male and females (p-value = 0.8776). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their alkaline phosphatase levels. 
+
+Triglycerides. There is no statistically significant difference in triglyceride levels between male and females (p-value = 0.2826). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their triglyceride levels. Interestingly, this result is different than the one found in the univariate results of MANOVA, which is likely because the contrasts are run using different settings and a different hypothesis than the MANOVA.
+
+Finally, we can look at the univariate contrasts between people using the treatment drug and placebo for each continuous response variable.
+
+Bilirubin. There is no statistically significant difference in serum bilirubin levels between people who took treatment or placebo drugs (p-value = 0.8351). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their serum bilirubin levels. 
+
+Cholesterol. There is no statistically significant difference in serum cholesterol levels between  male and females (p-value = 0.1546). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their serum cholesterol levels. 
+
+Albumin. There is no statistically significant difference in albumin levels between people who took treatment or placebo drugs (p-value = 0.8801). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their albumin levels. 
+
+Copper. There is no statistically significant difference in urine copper levels between people who took treatment or placebo drugs (p-value = 0.189). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their urine copper levels.
+
+Alkaline Phosphatase. There is no statistically significant difference in alkaline phosphatase levels between people who took treatment or placebo drugs (p-value = 0.2967). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their alkaline phosphatase levels. 
+
+Triglycerides. There is no statistically significant difference in triglyceride levels between people who took treatment or placebo drugs (p-value = 0.3952). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between sexes in their triglyceride levels. 
+
+The only difference between the MANOVA results and the contrast results are in the univariate contrasts between sexes for triglycerides, which is likely due to the nature of the differences in the analyses. Unfortunately, contrasts are not particularly useful for categorical variables with only two factors after running MANOVA, as shown by the mostly redundant results.
+
+# Question 4
+``` {r}
+#linear model settings
+options(contrasts = c("contr.sum", "contr.poly"))
+
+#plot age against the continuous predictors
+plot(cirrhosis3$Age, cirrhosis3$Bilirubin, 
+     xlab = "Age (Days)", 
+     ylab = "Serum Bilibrubin Levels", 
+     pch = 19, 
+     main = "Scatterplot of Age vs. Serum Bilirubin Levels",
+     col = "blue")
+abline(lm(cirrhosis3$Bilirubin ~ cirrhosis3$Age), col = "red") 
+plot(cirrhosis3$Age, cirrhosis3$Cholesterol,
+     xlab = "Age (Days)", 
+     ylab = "Serum Cholesterol Levels", 
+     pch = 19, 
+     main = "Scatterplot of Age vs. Serum Cholesterol",
+     col = "blue")
+abline(lm(cirrhosis3$Cholesterol ~ cirrhosis3$Age), col = "red") 
+plot(cirrhosis3$Age, cirrhosis3$Albumin,
+     xlab = "Age (Days)", 
+     ylab = "Albumin Levels", 
+     pch = 19, 
+     main = "Scatterplot of Age vs. Albumin",
+     col = "blue")
+abline(lm(cirrhosis3$Albumin ~ cirrhosis3$Age), col = "red") 
+plot(cirrhosis3$Age, cirrhosis3$Copper,
+     xlab = "Age (Days)", 
+     ylab = "Urine Copper Levels", 
+     main = "Scatterplot of Age vs. Urine Copper",
+     pch = 19, 
+     col = "blue")
+abline(lm(cirrhosis3$Copper ~ cirrhosis3$Age), col = "red") 
+plot(cirrhosis3$Age, cirrhosis3$Alk_Phos,
+     xlab = "Age (Days)", 
+     ylab = "Alkaline Phosphatase Levels", 
+     main = "Scatterplot of Age vs. Alkaline Phosphatase Levels",
+     pch = 19, 
+     col = "blue")
+abline(lm(cirrhosis3$Alk_Phos ~ cirrhosis3$Age), col = "red") 
+plot(cirrhosis3$Age, cirrhosis3$Tryglicerides,
+     xlab = "Age (Days)", 
+     ylab = "Triglycerides", 
+     main = "Scatterplot of Age vs. Triglyceride Levels",
+     pch = 19, 
+     col = "blue")
+abline(lm(cirrhosis3$Tryglicerides ~ cirrhosis3$Age), col = "red")
+
+```
+
+After looking at the scatterplots between age and the different response variables, there appears to be some level of linear relationships between each of the response variables and the patient's age in days. While the scatterplot is not perfectly on the line of best fit, they do seem to follow a general trend; for cases like Cholesterol and Triglyceride, the trend is even more visible. This suggests that age is a good continuous variable to use for the Multivariate GLM analysis.
+
+```{r}
+#fit the model
+cirrMod <- lm(cbind(Bilirubin, Cholesterol, Albumin, Copper, Alk_Phos, 
+                    Tryglicerides) ~ Sex*Drug + Age, data = cirrhosis3)
+
+#multivariate results and univariate results with with type 3 Sum of squares
+summary(Anova(cirrMod, type = 3), univariate = T)
+
+#type I Sum of Squares (sequential) for each response
+modBili <- lm(Bilirubin ~ Sex*Drug + Age, data = cirrhosis3)
+modChol <- lm(Cholesterol ~ Sex*Drug + Age, data = cirrhosis3)
+modAlbu <- lm(Albumin ~ Sex*Drug + Age, data = cirrhosis3)
+modCopp <- lm(Copper ~ Sex*Drug + Age, data = cirrhosis3)
+modAlk <- lm(Alk_Phos ~ Sex*Drug + Age, data = cirrhosis3)
+modTryg <- lm(Tryglicerides ~ Sex*Drug + Age, data = cirrhosis3)
+
+summary(modBili)
+summary(modChol)
+summary(modAlbu)
+summary(modCopp)
+summary(modAlk)
+summary(modTryg)
+
+```
+First, we can look at the univariate results for each response variable:
+
+Bilirubin. There are no statistically significant differences in serum bilirubin levels between people who took treatment or placebo drugs, nor was there a statistically significant difference between males and females (p-value = 0.855, 0.291, respectively). Since all of these p-values are above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between groups in their serum bilirubin levels. There was no statistically significant change in serum bilirubin levels with a change in age (p-value = 0.377). Because this p-value is greater than 0.05, we fail to reject the null hypothesis that there is no change in serum bilirubin level with a change in age. There is also no statistically significant interaction between treatment drug status and sex for serum bilirubin levels, as the p-value is 0.435. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Cholesterol. There are no statistically significant differences in serum cholesterol levels between people who took treatment or placebo drugs, nor was there a statistically significant difference between males and females (p-value = 0.12665, 0.63983, respectively). Since both of these p-values are above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between groups in their serum cholesterol levels. There was a statistically significant change in serum cholesterol levels with a change in age (p-value = 0.00302). Because this p-value is less than 0.05, we reject the null hypothesis that there is no change in serum cholesterol level with a change in age. There is also no statistically significant interaction between treatment drug status and sex for serum cholesterol levels, as the p-value is 0.10734. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Albumin. There are no statistically significant differences in albumin levels between people who took treatment or placebo drugs,  (p-value = 0.9733). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between between treatment/placebo groups in their albumin levels. However, there is a statistically significant difference between males and females (p-value = 0.0189). Since this is below the 0.05 threshold, we reject the null hypothesis that there is no difference in albumin levels between males and females, suggesting that there is a real difference between sexes. There was also a statistically significant change in serum albumin levels with a change in age (p-value = 2.15e-05). Because this p-value is less than 0.05, we reject the null hypothesis that there is no change in albumin level with a change in age. There is also no statistically significant interaction between treatment drug status and sex for albumin levels, as the p-value is 0.7800. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Copper. There are no statistically significant differences in urine copper levels between people who took treatment or placebo drugs (p-value = 0.186139). Since this p-value is above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between treatment/placebo groups in their urine copper levels. However, there is a statistically significant difference between males and females (p-value = 0.000136). Since this is far below the 0.05 threshold, we reject the null hypothesis that there is no difference in urine copper levels between males and females, suggesting that there is a real difference between sexes. There was no statistically significant change in urine copper levels with a change in age (p-value = 0.693274). Because this p-value is greater than 0.05, we fail to reject the null hypothesis that there is no change in urine copper level with a change in age. There is also no statistically significant interaction between treatment drug status and sex for urine copper levels, as the p-value is 0.104800. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Alkaline Phosphatase. There are no statistically significant differences in alkaline phosphatase levels between people who took treatment or placebo drugs, nor was there a statistically significant difference between males and females (p-value = 0.286, 0.950, respectively). Since both of these p-values are above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between groups in their alkaline phosphatase levels. There was no statistically significant change in alkaline phosphatase levels with a change in age (p-value = 0.378). Because this p-value is greater than 0.05, we fail to reject the null hypothesis that there is no change in alkaline phosphatase levels with a change in age. There is also no statistically significant interaction between treatment drug status and sex for alkaline phosphatase levels, as the p-value is 0.186. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Triglycerides. There are no statistically significant differences in triglyceride levels between people who took treatment or placebo drugs, nor was there a statistically significant difference between males and females (p-value = 0.4049, 0.3647, respectively). Since both of these p-values are above the threshold of 0.05, we fail to reject the null hypothesis that there is no difference between groups in their triglyceride levels. There was no statistically significant change in triglyceride levels with a change in age (p-value = 0.5728). Because this p-value is greater than 0.05, we fail to reject the null hypothesis that there is no change in triglyceride levels with a change in age. There is also no statistically significant interaction between treatment drug status and sex for triglyceride levels, as the p-value is 0.0632. Since this is more than 0.05, we fail to reject the null hypothesis that there is no significant interaction between treatment drug status and sex.
+
+Next, we can take a look at the multivariate results. 
+
+When looking at the multivariate results, we find that there is a statistically significant difference between sexes, as all of the multivariate statistics are significant (Pillai Trace, Wilks' Lambda, Hotelling's Trace, and Roy's Largest Root: p-value = 7.3076e-05). Since these values are all less than the threshold of 0.05, we can reject the null hypothesis and show significance.
+
+Alternatively, there does not seem to be a statistically significant difference between people who are on the placebo and people who are using the treatment drug, as all of the multivariate statistics are not significant (Pillai Trace, Wilks' Lambda, Hotelling's Trace, and Roy's Largest Root: p-value = 0.4654). Since these values are all greater than the threshold of 0.05, we fail to reject the null hypothesis.
+
+There also does not seem to be a statistically significant interaction between treatment drug status and sex, as none of the multivariate statistics are significant either (Pillai Trace, Wilks' Lambda, Hotelling's Trace, and Roy's Largest Root: p-value = 0.30045). Since these values are all greater than the threshold of 0.05, we fail to reject the null hypothesis.
+
+There seems to be a statistically significant change in the multivariate response variables with respect to age, as all of the multivariate statistics are significant (Pillai Trace, Wilks' Lambda, Hotelling's Trace, and Roy's Largest Root: p-value = 4.684e-06). Since these values are all less than the threshold of 0.05, we can reject the null hypothesis and show significance.
+
+# Question 5
+``` {r}
+#checking multivariate normality of residuals
+cqplot(cirrMod$residuals, main = "Chi-Squared Plot of Residuals from Multivariate GLM")
+
+par(mar=c(5,5,5,5))
+plot(modBili, which = c(1), 
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Serum Bilirubin Level (1)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modBili, which = c(2), 
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Serum Bilirubin Level (2)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modChol, which = c(1), 
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Serum Cholesterol Level (1)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modChol, which = c(2), 
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Serum Cholesterol Level (2)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modAlbu, which = c(1), 
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Albumin Level (1)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modAlbu, which = c(2), 
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Albumin Level (2)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modCopp, which = c(1),
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Urine Copper Level (1)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modCopp, which = c(2),
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Urine Copper Level (2)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modAlk, which = c(1), 
+     pch = 19, 
+     main = "Multivariate GLM Graph With Relation to Alk. Phosph. Level (1)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modAlk, which = c(2), 
+     pch = 19, 
+     main = "Multivariate GLM Graph With Relation to Alk. Phosph. Level (2)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modTryg, which = c(1),
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Trigliceride Level (1)",
+     col = 'red')
+par(mar=c(5,5,5,5))
+plot(modTryg, which = c(2),
+     pch = 19,
+     main = "Multivariate GLM Graph With Relation to Trigliceride Level (2)",
+     col = 'red')
+
+#Box-Cox for each variable
+print("Bilirubin")
+cirrhosis3$newBili <- cirrhosis3$Bilirubin - 
+      min(cirrhosis3$Bilirubin, na.rm = T)*1.01
+modBili2 <- lm(newBili ~ Sex*Drug + Age, data = cirrhosis3)
+BC <- boxcox(modBili2, optimize = T)
+(lambda <- BC$x[which.max(BC$y)])
+cirrhosis3$newBili <- (cirrhosis3$Bilirubin)^(0.505)
+
+print("Cholesterol")
+BC <- boxcox(modChol, optimize = T)
+(lambda <- BC$x[which.max(BC$y)])
+cirrhosis3$newChol <- (cirrhosis3$Cholesterol)^(-2)
+
+print("Alk_Phos")
+BC <- boxcox(modAlk, optimize = T)
+(lambda <- BC$x[which.max(BC$y)])
+cirrhosis3$newAlk <- (cirrhosis3$Alk_Phos)^(-1.838)
+
+#new linear model
+cirrMod2 <- lm(cbind(newBili, newChol, Albumin, Copper, newAlk, Tryglicerides) 
+      ~ Sex*Drug + Age, data = cirrhosis3)
+summary(Anova(cirrMod2, type = 3), univariate = T)
+cqplot(cirrMod2$residuals, main = "Chi-Squared Plot of Residuals from Modified Multivariate GLM")
+```
+
+After looking at the residuals, we see that the residuals for the Multivariate GLM are not perfectly normal, which suggests that there is some heteroskedasticity. Thus, we look at the QQ plots for each of the analyzed continuous variables, which suggest that Albumin, Copper, and Tryglicerides are relatively homoskedastic and that Bilirubin, Cholesterol, and Alkaline Phosphatase are heteroskedastic. Thus, we must run a Box-Cox transformation on the last three variables to reduce the effects of heteroskedasticity on the model. 
+
+Box-Cox helps find a lambda value that can be used as an exponent for a transformation of the given continuous variable. Through Box-Cox, we find that the suggest lambda values are 0.505 for Bilirubin, -2 for Cholesterol, and -1.838 for Alkaline Phosphatase. After making a new Multivariate GLM after running these transformations, we do not see any changes in whether each variable/interaction is statistically significant or not (sex and age still show statistical significance in multivariate space, while treatment drug status does not. The interaction between Sex and Drug is still not statistically significant). However, after looking at the residuals of the new model, we see that they are closer to multivariate normality.
+
+## Question 6
+``` {r}
+mrpp1 <- mrpp(cirrhosis3[,c("Bilirubin", "Cholesterol", "Albumin", "Copper", 
+        "Alk_Phos", "Tryglicerides")], cirrhosis3$Sex)
+mrpp1
+
+mrpp2 <- mrpp(cirrhosis3[,c("Bilirubin", "Cholesterol", "Albumin", "Copper", 
+        "Alk_Phos", "Tryglicerides")], cirrhosis3$Drug)
+mrpp2
+```
+
+Now, we can run MRPP on the variables we used for the MANOVA analysis (Bilirubin, Cholesterol, Albumin, Copper, Alkaline Phosphatase, and Tryglicerides) to check for significance as well. MRPP permutes the inputted variables and calculates a delta value for each one (including the delta value for the original dataset as is). Then, it looks at the number of permuted delta values that are less than the delta value calculated from the original data. These values are converted to the fraction given in significance of delta, which is representative of whether the groups are equal or not. 
+
+There is a statistically significant difference between males and females using MRPP because the significance of the delta is 0.028. Since this value is less than the threshold value of 0.05, we reject the null hypothesis that there is no difference between males and females. However, there is not a statistically significant difference between people taking the treatment drug and the placebo because the significance of the delta is 0.435. Since this value is above the threshold value of 0.05, we fail to reject the null hypothesis that there is no difference between the treatment drug status.
+
+These conclusions support the ones made in MANOVA and Multivariate GLM as well, which makes sense; even though the methodology is different, if the groups are truly the same or different they will still give the same result no matter what type of test is run.
+
+``` {r}
+summary(Anova(cirrMAOV), univariate = T, p.adjust.method = TRUE)
+summary(Anova(cirrMod2), univariate = T, p.adjust.method = TRUE)
+
+#p-adjust MANOVA Sex / Drug / Interaction
+p.adjust(p = c(0.8465, 0.0002259, 0.23321), method = "bonferroni")
+p.adjust(p = c(0.8465, 0.0002259, 0.23321), method = "holm")
+p.adjust(p = c(0.8465, 0.0002259, 0.23321), method = "hochberg")
+
+#p-adjust Multivariate GLM Sex / Drug / Age / Interaction
+p.adjust(p = c(1.5028e-05, 0.81113, 4.684e-06, 0.30045), method = "bonferroni")
+p.adjust(p = c(1.5028e-05, 0.81113, 4.684e-06, 0.30045), method = "holm")
+p.adjust(p = c(1.5028e-05, 0.81113, 4.684e-06, 0.30045), method = "hochberg")
+
+```
+
+When we have multiple p-values that are produced in an ANOVA, we can use p-value adjusting on them.
+
+For the MANOVA, we use the p-values from three different places: Sex, Drug, and the interaction between the two. The original p-values are (0.8465, 0.0002259, 0.23321). The Bonferroni correction gives adjusted p-values of (1.0000000, 0.0006777, 0.6996300), which are all larger than the original p-values that were adjusted. The first p-value for Sex, which was the largest, was adjusted to 1. Both Holm and Hochberg adjustments give p-values of (0.8465000, 0.0006777, 0.4664200). The first value of the three (corresponding to Sex) in the Holm and Hochberg adjustment is equal to the original p-value from the MANOVA, while the second two (Drug and the interaction with Sex and Drug) are higher than the original p-values. This reinforces how Bonnferoni adjustments are the most conservative type of adjustment, and are not worth using instead of Holm or Hochberg; rather than adjusting the highest p-value all the way to 1, Holm and Hochberd are more reasonable with their adjustments.
+
+For the Multivariate GLM, we use the p-values from four different places: Sex, Drug, Age, and the interaction between the two. The original p-values are (1.5028e-05, 0.81113, 4.684e-06, 0.30045). The Bonferroni correction gives adjusted p-values of (6.0112e-05, 1.000000, 1.8736e-05, 1.000000), which are all larger than the original p-values that were adjusted. The first p-value for Sex, which was the largest, was adjusted to 1, as was the p-value for the interaction between Sex and Drug. Both Holm and Hochberg adjustments give p-values of (4.5084e-05, 0.81113, 1.8736e-05, 0.60090). All four of the p-values after Holm and Hochberg adjustment are greater than or equal to the original p-values. Bonnferoni is far too conservative, bringing a p-value of 0.30045 up to 1, matching the adjusted p-value for 0.81113; alternatively, Holm and Hochberg do not bring the p-values up to 1, nor does it equalize two p-values that have a significant difference between each other. 
