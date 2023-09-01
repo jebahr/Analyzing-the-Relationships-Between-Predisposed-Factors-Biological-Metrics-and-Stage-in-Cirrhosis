@@ -1,0 +1,747 @@
+---
+title: "S&DS 363 Homework 7"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+date: "April 25th, 2023"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn=-1)
+```
+Names: Dinesh Bojja and Jonah Bahr
+
+S&DS 363: Homework 7 Factor Analysis
+
+## Libraries:
+```{r}
+library(MASS)
+library(biotools)
+library(klaR)
+library(car)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(ggExtra)
+library(heplots)
+library(ks)
+library(outliers)
+library(stringr)
+library(vegan)
+library(fpc)
+library(aplpack)
+library(cluster)
+library(fpc)
+library(ape)
+library(amap)
+library(NbClust)
+library(clValid)
+library(factoextra)
+library(vegan3d)
+library(mgcv)
+library(rgl)
+library(scatterplot3d)
+library(corrplot)
+library(EFAtools)
+library(psych)
+```
+
+## Preliminaries:
+```{r}
+#color palettes
+colors <- c("#ff2d00",
+            "#66BD63",
+            "#0026ff",
+            "#FDAE61",
+            "#D9EF8B",
+            "#ffc500",
+            "#e800ff",
+            "#00b2ff",
+            "#9700ff",
+            "#7c0a62"
+)
+
+#download dataset
+cirrhosis <- read.csv("cirrhosis.csv", header = TRUE)
+cirrhosis$Status = as.factor(cirrhosis$Status)
+cirrhosis$Drug = as.factor(cirrhosis$Drug)
+cirrhosis$Sex = as.factor(cirrhosis$Sex)
+cirrhosis$Stage = as.factor(cirrhosis$Stage)
+head(cirrhosis)
+names(cirrhosis)
+```
+
+Description of dataset: Cirrhosis is a late stage of scarring of the liver caused by many types of liver diseases and conditions, such as hepatitis and chronic alcoholism. Our data was collected by a Mayo Clinic trial in primary biliary cirrhosis (PBC) of the liver conducted between 1974 and 1984.  In the dataset, we find information on the following attributes for patients with cirrhosis: Status, Drug, Age, Sex, Ascites, Hepatomegaly, Spiders, Edema, Bilirubin, Cholesterol, Albumin, Copper, Alk_Phos, SGOT, Triglycerdies, Platelets, Prothrombin, and Stage.
+
+## Data Transformations and Prerequisites
+
+``` {r}
+#qqplots for raw data
+qqPlot(cirrhosis$Bilirubin, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Raw Bilirubin Level Data",
+       ylab = "Bilirubin Level (mg/dl)")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Cholesterol, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Raw Cholesterol Data",
+       ylab = "Serum Cholesterol Level (mg/dL)")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Albumin, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Raw Albumin Data",
+       ylab = "Albumin Level (gm/dL)")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Copper, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Raw Copper Data",
+       ylab = "Urine Copper Level (ug/day)")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Alk_Phos, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Raw Alkaline Phosphatase Data",
+       ylab = "Alkaline Phosphatase Level (U/liter)")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$SGOT, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Raw SGOT Data",
+       ylab = "SGOT Level (U/mL)")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Tryglicerides, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Raw Triglycerides Data",
+       ylab = "Trigliderides Level (mg/dl)")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Platelets, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Raw Platelets Data",
+       ylab = "Platelets Level (mL/1000)")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis$Prothrombin, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Raw Prothrombin Data",
+       ylab = "Prothrombin Time (s)")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#chi-square plot for raw data
+cqplot(cirrhosis[, c("Bilirubin", 
+      "Cholesterol", "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", 
+      "Platelets", "Prothrombin")], 
+      main = "Chi-Square Plot of Raw Data")
+```
+
+Clearly the data is not multivariate normal, so we must do some transformations to get it in a form that is easier to analyze. This is important because analyses like Maximum Likelihood require multivariate normality. Insofar as we need to transform the data later, it may be worthwhile to transform the data first to keep the results from all of the different tests somewhat comparable.
+
+``` {r}
+#transformations
+cirrhosis2 <- cirrhosis[,c(11:19)]
+cirrhosis2[1] = log(cirrhosis[11])
+cirrhosis2[2] = log(cirrhosis[12])
+cirrhosis2[3] = (cirrhosis[13])^2
+cirrhosis2[4] = log(cirrhosis[14])
+cirrhosis2[5] = log(cirrhosis[15])
+cirrhosis2[6] = log(cirrhosis[16])
+cirrhosis2[7] = log(cirrhosis[17])
+cirrhosis2[9] = log(cirrhosis[19])
+
+#transformed qqplots
+qqPlot(cirrhosis2$Bilirubin, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Transformed Bilirubin Data",
+       ylab = "Bilirubin Level")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Cholesterol, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Transformed Cholestrol Data",
+       ylab = "Serum Cholesterol Level")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Albumin, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Transformed Albumin Data",
+       ylab = "Albumin Level")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Copper, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Transformed Copper Data",
+       ylab = "Urine Copper Level")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Alk_Phos, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Transformed Alkaline Phosphatase Data",
+       ylab = "Alkaline Phosphatase Level")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$SGOT, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Transformed SGOT Data",
+       ylab = "SGOT Level")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Tryglicerides, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Transformed Triglycerides Data",
+       ylab = "Trigliderides Level")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Platelets, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Transformed Platelets Data",
+       ylab = "Platelets Level")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+qqPlot(cirrhosis2$Prothrombin, col= colors[factor(cirrhosis$Stage)],pch=16,
+       main = "QQ-Plot for Transformed Prothrombin Data",
+       ylab = "Prothrombin Time")
+legend("topleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#transformed chi-square plots
+cqplot(cirrhosis2[, c("Bilirubin", 
+      "Cholesterol", "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", 
+      "Platelets", "Prothrombin")], 
+      main = "Transformed Chi-Square Plot")
+```
+
+``` {r}
+#cirrhosis
+boxplot(cirrhosis2$Bilirubin ~ cirrhosis$Stage , data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        main = "Presence of Serum Bilirubin in Blood by Cirrhosis Stage",
+        xlab = "Serum Bilirubin Level",
+        ylab = "Stage of Cirrhosis")
+legend("bottomright",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#cholesterol
+boxplot(cirrhosis2$Cholesterol ~ cirrhosis$Stage , data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        main = "Presence of Serum Cholesterol in Blood by Cirrhosis Stage",
+        xlab = "Serum Cholesterol Level",
+        ylab = "Stage of Cirrhosis")
+legend("bottomright",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#albumin
+boxplot(cirrhosis2$Albumin ~ cirrhosis$Stage , data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        main = "Presence of Albumin in Blood by Cirrhosis Stage",
+        xlab = "Albumin Level",
+        ylab = "Stage of Cirrhosis")
+legend("bottomleft",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#copper
+boxplot(cirrhosis2$Copper ~ cirrhosis$Stage , data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        main = "Presence of Copper in Urine by Cirrhosis Stage",
+        xlab = "Copper Level",
+        ylab = "Stage of Cirrhosis")
+legend("bottomright",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#alk_phos
+boxplot(cirrhosis2$Alk_Phos ~ cirrhosis$Stage , data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        main = "Presence of Alkaline Phosphatase in Blood by Cirrhosis Stage",
+        xlab = "Alkaline Phosphatase Level",
+        ylab = "Stage of Cirrhosis")
+legend("bottomright",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#SGOT
+boxplot(cirrhosis2$SGOT ~ cirrhosis$Stage , data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        main = "Presence of SGOT in Blood by Cirrhosis Stage",
+        xlab = "SGOT Level",
+        ylab = "Stage of Cirrhosis")
+legend("bottomright",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#trigliderides
+boxplot(cirrhosis2$Tryglicerides ~ cirrhosis$Stage , data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        main = "Presence of Triglycerides in Blood by Cirrhosis Stage",
+        xlab = "Triglycerides Level",
+        ylab = "Stage of Cirrhosis")
+legend("bottomright",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#platelets
+boxplot(cirrhosis2$Platelets ~ cirrhosis$Stage , data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        main = "Presence of Platelets in Blood by Cirrhosis Stage",
+        xlab = "Platelets Level",
+        ylab = "Stage of Cirrhosis")
+legend("bottomright",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+
+#prothrombin
+boxplot(cirrhosis2$Prothrombin ~ cirrhosis$Stage , data=cirrhosis2, 
+        col = colors, horizontal = T, 
+        main = "Prothrombin Time by Cirrhosis Stage",
+        xlab = "Prothrombin Time",
+        ylab = "Stage of Cirrhosis")
+legend("topright",
+       legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+       xpd = TRUE,
+       pch = 19,
+       col = colors)
+```
+
+## Question 1
+
+Given the context of the dataset, containing medical and basic personal information about different individuals at different stages at cirrhosis, we can make some general guesses to what the underlying factors may be. Primarily, we predict that the stage of cirrhosis will have a major effect on the dataset, as the stage of cirrhosis will have a major effect on the entire body system and all of the indicator variables involved with the system will be affected. Additionally, we predict that things like age and sex will have an effect on the different variables, as these variables are intrinsic to an individual and have an effect on the human biology of each person. These biological changes across sexes, and across age ranges, will lead to changes in certain parts of the body and the blood chemistry, which would lead to the variability seen in the data. Of course, it is possible that there are other factors that are not already described by the dataset already that have to do with specific biological mechanisms or environmental mechanisms that cause the changes seen in the data, but we can find out what those are when we see the factors themselves.
+
+## Question 2
+
+```{r  fig.height = 5, fig.width = 5}
+#Examine raw correlations
+round(cor(cirrhosis2),2)
+
+#Get correlation plot
+corrplot.mixed(cor(cirrhosis2), lower.col = "black", upper = "ellipse", 
+    tl.col = "black", number.cex = .7, tl.pos = "lt", tl.cex = .7, 
+    p.mat = cor.mtest(cirrhosis2, conf.level = .95)$p, sig.level = .05)
+
+```
+
+In this dataset, we have 9 main indicators, all of which are factors in an individuals blood. Through the correlation matrix, we can see the relationships between each of the factors, and see if any of them are highly correlated with another for the sake of factor analysis. A correlation matrix shows the strength and direction of correlation between each pair of indicator variables for the dataset, which allows us to make determinations regarding whether there are underlying factors in the data or not.
+
+Immediately after printing the correlation matrix, it is clear that the variables Platelets and Prothrombin are not highly correlated with the rest of the dataset. This is because several of the paired correlations with the variable and some other factor are incredibly low, meaning that both Platelets and Prothrombin may not have any shared factors with the rest of the data. We will need to consider if we will include these factors in the final factor analysis or not; including them would allow for full analysis of the data but at the risk of less robust results, but removing them may not allow for full analysis and interpretation of the data for the benefit of a more accurate result. We can make a more educated decision based on KMO. The rest of the variables, however, seem to have some consequential (some weak, some strong) relationship with one another. This suggests that factor analysis would be, at the very least, a good metric to understand the underlying common variables that describe the trends in the data.
+
+## Question 3
+
+```{r}
+#This uses the KMO() function in the EFAtools package
+KMO(as.matrix(cirrhosis2))
+KMO(as.matrix(cirrhosis2[, c(1:7)]))
+```
+
+We now run KMO on the dataset to test for homogeneity of the of the variables in the dataset. To do this, it analyzes the adequacy of each variable in the model and the complete model, and measures the proportion of the variance in the dataset that can be explained by some common variance.
+
+After running KMO on the complete set of indicators, we get that the KMO value is middling (with a KMO value of 0.72). When we run KMO on the dataset when excluding the two factors determined to have low correlation with the other factors (Platelets and Prothrombin), we still get a middling KMO value, albeit a little higher (0.75). Since the KMO value does not increase substantially by removing Platelets and Prothombin, instead giving a KMO value that is roughly the same, we conclude that it would be better to include these two indicators for the sake of data completeness.
+
+Now, since the KMO value is 0.72 for the full set of indicators, we can tell that the data is suitable for factor analysis, as it is categorized as "middling". This means that a proportion of 0.72 of the variance in the dataset can be explained by some common variance, which we can interpret as some common factor that is shared across the dataset. Since this is a significant proportion of the dataset that is explained by a set of common factors, factor analysis would be appropriate for this dataset in particular.
+
+``` {r}
+cortest.bartlett(cor(cirrhosis2), n = nrow(cirrhosis2))
+```
+
+Bartlett’s Test of Sphericity checks the correlation matrix of the dataset to the identity matrix, and sees if there is any redundancy between the variables that can be summarized with some factors, and if any factors can be constructed in general. Since the p-value is very very small (2.986326e-101), we reject the null hypothesis that there are no common factors that exist, meaning that there are some factors that can be used to summarize the differences in the data.
+
+Overall, we have sufficient evidence to prove that factor analysis would work for this dataset.
+
+## Question 4
+
+``` {r}
+cirrfact1 <- princomp(cirrhosis2[complete.cases(cirrhosis2), ], cor = TRUE)
+summary(cirrfact1)
+
+PARALLEL(as.matrix(cirrhosis2))
+
+#the xlab, ylab, and the main title of the graph cannot be edited without 
+#changing the function itself (namely, PARALLEL(as.matrix(cirrhosis2))); 
+#thus, there is nothing to do but leave them how they are.
+
+#calculate eigenvalues for each comp.
+eigenvalues <- cirrfact1$sdev^(2)
+print(eigenvalues)
+
+plot(eigenvalues, type = "b", main = "Screeplot for PCA of Cirrhosis Data", 
+     ylab = "Eigenvalues", xlab = "Components")
+```
+
+In the scree plot that shows the Eigenvalues of each component, we can clearly see how many of the components have a variance over 1. Only Components 1 and 2 have eigenvalues greater than 1, meaning that the Eigenvalue > 1 test suggests that we use only two factors for this analysis.
+
+Looking at the same scree plot, however, we can see that there is a very strong elbow at the third component. While in clustering analysis it would make sense to choose three clusters to correspond with the elbow, when it comes to PCA and factor analysis, we would actually cut the scree plot above the elbow at three components. This is because the elbow is the point where the variances in the data are residual variances from the random variability of data rather than variability from actual factors, meaning that we would need to cut above the elbow to deduce the number of factors. So, the scree plot suggests that we use 2 factors.
+
+The Parallel Analysis function uses three different values to find the suggested number of factors. The PCA analysis comes from the eigenvalues found through regular PCA, the SMC analysis comes from using a modified parallel analysis (starting with a matrix that is the modified correlation matrix, not the exact correlation matrix), and the EFA analysis uses exploratory factor analysis to estimate communalities and finds the eigenvalues with a correlation matrix with the communalities as diagonal elements.
+
+The Parallel Analysis suggests that we use either 2 or 4 factors, as it suggests that for PCA and EFA determined eigenvalues, there should be 2 factors used, while for SMC-determined eigenvalues there should be 4. However, looking at the scree plot for the SMC-determined eigenvalues, the real eigenvalues is just barely above the means line for 3 and 4 indicators, to the point where it would not be conducive to a good analysis to use either number of factors; instead, 2 factors is the last number of indicators that is significantly above the lines, meaning that from a realistic analysis perspective, it would be safe to use 2 factors from the information derived from SMC-eigenvalues (as well as the rest of the analyses).
+
+Given these results, have very strong evidence that suggests that it is best to run Factor Analysis using 2 factors to determine if there are any underlying factors found in the indicator variables. 
+
+## Question 5
+
+As we do each analysis, we hope to try to make some preliminary determinations regarding what each factor may represent. This way, in addition to considering the RMSR and number/percent of residuals greater than 0.05, we can consider which method gives factors that make the most sense with regards to the data itself. We do recognize that there will likely be changes in the direction of the data in the future after rotations, after which we will revise our preliminary ideas.
+
+### PCA
+
+```{r}
+cirrfact1 <- factor.pa(cirrhosis2, nfactors = 2, SMC = FALSE, max.iter = 1, 
+    rotate = "none")
+cirrfact1$loadings
+```
+
+``` {r}
+plot(cirrfact1$loadings[,c(1,2)], pch = 18, col = 'red', 
+     main = "PCA Plot for 2 Factor Analysis, Components 1 and 2")
+abline(h = 0)
+abline(v = 0)
+text(cirrfact1$loadings[,c(1,2)], labels = names(cirrhosis2), cex = 0.8)
+```
+
+Factor 1 describes a direction with high levels of Bilirubin, SGOT, Copper, Cholesterol, Triglycerides, Alkaline Phosphatase, and Prothrombin Time, but low levels of Platelets and Albumin (or vice versa). In context of the dataset, this axis likely describes how far the cirrhosis has progressed in an individual, measured through the stage of cirrhosis. Looking at the boxplots printed at start of the document, we can see that Albumin levels are higher for individuals who have lower levels of cirrhosis (Stages 1, 2, or 3), but for people in the final stage of cirrhosis (Stage 4) their Albumin levels are lower. Similarly, the level of Platelets was lower for the final stage of cirrhosis, but higher in the earlier stages. Alternatively, the other variables (Bilirubin, Copper, and SGOT show this most clearly) have higher levels in individuals who are in a higher stage of cirrhosis, which is why they are on the opposite side of the axis compared to Albumin and Platelets.
+
+Factor 2 describes a direction characterized by high Cholesterol and Platelet levels, and low Prothrombin Time. This axis is likely separated by how each of the measures relates to coagulation, or clotting, of the blood. On the positive end of the spectrum, an increase in the value or rate corresponds with an increase in coagulation; Platelets, by definition, are clotting factors, and Cholesterol has been shown to help with clotting (https://www.healthline.com/health/high-cholesterol/does-high-cholesterol-cause-blood-clots#blood-clots-in-the-legs). Alkaline Phosphatase has been shown to be a coagulant for people having coronary artery disease, which may also be reflected in patients with cirrhosis (doi:10.1093/eurheartj/ehs419). Similarly, high Triglyceride content has been shown to increase the rate of clotting (doi:10.3343/alm.2015.35.1.15). On the other end of the spectrum, Prothrombin Time measures how long it takes for a blood to clot in a sample, which is why an increased Prothrombin Time leads not to coagulation, but anticoagulation, and puts it far on the opposite side of the graph. Interestingly, Albumin has been shown to be a mild anticoagulant, which is odd considering it is on the side for coagulants; this may be why it is lower on the spectrum compared to platelets (this may be fixed during the rotations) (doi:10.1371/journal.pone.0182997). 
+
+Again, these explanations of the different directions are preliminary, as the rotation will probably maintain the general trend of the factors themselves that are seen here, but with some modifications to the loadings and where the data plots that allows for more logical analyses of the data. We will re-evaluate these interpretations again in Question 6 to see if the original interpretations made sense.
+
+```{r}
+#get reproduced correlation matrix
+repro1 <- cirrfact1$loadings%*%t(cirrfact1$loadings)
+#residual correlation matrix
+resid1 <- cor(cirrhosis2)-repro1
+round(resid1, 2)
+
+#get root-mean squared residuals - again, in output above
+len <- length(resid1[upper.tri(resid1)])
+RMSR1 <- sqrt(sum(resid1[upper.tri(resid1)]^2)/len)
+RMSR1
+
+#get proportion of residuals greater than 0.05 in absolute value
+paste0(round(sum(rep(1, len)[abs(resid1[upper.tri(resid1)])>0.05])/len*100),"%")
+```
+
+When running a PCA without iteration, we see that the RMSR (Root Mean Square Residual) is 0.104. RMSR is calculated by taking the square root of the averaged square values of the diagonal entries in the residual correlation matrix, and this value is to be taken in consideration with the other extraction method to decide which one is the best for this factor analysis.
+
+The percent of residuals that are greater than 0.05 is 64%, meaning that there are a large number of residuals that are not explained by the factors presented in this extraction method. This suggests that there is likely either another factor or another extraction method that would make the PCA a better fit for the dataset.
+
+### PAF
+
+```{r}
+cirrfact2 <- factor.pa(cirrhosis2, nfactors = 2, SMC = TRUE, max.iter = 1, 
+    rotate = "none")
+cirrfact2$loadings
+```
+
+```{r}
+plot(cirrfact2$loadings[,c(1,2)], pch = 18, col = 'red', 
+     main = "PAF Plot for 2 Factor Analysis, Components 1 and 2")
+abline(h = 0)
+abline(v = 0)
+text(cirrfact2$loadings[,c(1,2)], labels = names(cirrhosis2), cex = 0.8)
+```
+
+Interestingly, the non-iterative PAF plot looks almost identical to the non-iterative PCA plot (with some slight movements of the data points around the two-dimensional space). This means that a lot of the same interpretations can be applied to the axes and directions described above (which have been cut down to reduce redundancy):
+
+Factor 1 describes a direction with high levels of Bilirubin, SGOT, Copper, Cholesterol, Triglycerides, Alkaline Phosphatase, and Prothrombin Time, but low levels of Platelets and Albumin (or vice versa). In context of the dataset, this axis likely describes how far the cirrhosis has progressed in an individual, measured through the stage of cirrhosis. The side with Bilirubin is a higher stage (Stage 4), while the side with Albumin is a lower stage (Stage 1, 2, or 3).
+
+Factor 2 describes a direction characterized by high Cholesterol and Platelet levels, and low Prothrombin Time. This axis is likely separated by how each of the measures relates to coagulation, or clotting, of the blood. The side with Cholesterol and Platelets is indicative of coagulation, or values for which an increase represents more coagulation. The side with Prothrombin Time represents values or measures that, when increased, is indicative of anticoagulation.
+
+```{r}
+#get reproduced correlation matrix
+repro2 <- cirrfact2$loadings%*%t(cirrfact2$loadings)
+#residual correlation matrix
+resid2 <- cor(cirrhosis2)-repro2
+round(resid2, 2)
+
+#get root-mean squared residuals - again, in output above
+len <- length(resid2[upper.tri(resid2)])
+RMSR2 <- sqrt(sum(resid2[upper.tri(resid2)]^2)/len)
+RMSR2
+
+#get proportion of residuals greater than 0.05 in absolute value
+paste0(round(sum(rep(1, len)[abs(resid2[upper.tri(resid2)])>0.05])/len*100),"%")
+```
+
+When running PAF without iteration, we see that the RMSR (Root Mean Square Residual) is 0.0452. The percent of residuals that are greater than 0.05 is 25%, meaning that there are a decent number of residuals that are not explained by the factors presented in this extraction method. Overall, however, PAF is far better than PCA as an extraction method.
+
+### Iterative PCA
+
+```{r}
+cirrfact3 <- factor.pa(cirrhosis2, nfactors = 2, SMC = FALSE, max.iter = 1000, 
+    rotate = "none")
+cirrfact3$loadings
+```
+
+```{r}
+plot(cirrfact3$loadings[,c(1,2)], pch = 18, col = 'red', 
+     main = "Iterative PCA Plot for 2 Factor Analysis, Components 1 and 2")
+abline(h = 0)
+abline(v = 0)
+text(cirrfact3$loadings[,c(1,2)], labels = names(cirrhosis2), cex = 0.8)
+```
+
+Compared to the non-iterative PCA plot, the iterative PCA plot looks very similar, with some small changes that do not have a very strong effect on the interpretation of the data. For example, Bilirubin is a little lower on PA2 on the iterative PCA plot compared to where it is on the axis for PA2 in the non-iterative PCA plot.
+
+However, the interpretations remain very similar, if not identical:
+
+Factor 1 describes a direction with high levels of Bilirubin, SGOT, Copper, Cholesterol, Triglycerides, Alkaline Phosphatase, and Prothrombin Time, but low levels of Platelets and Albumin (or vice versa). In context of the dataset, this axis likely describes how far the cirrhosis has progressed in an individual, measured through the stage of cirrhosis. The side with Bilirubin is a higher stage (Stage 4), while the side with Albumin is a lower stage (Stage 1, 2, or 3).
+
+Factor 2 describes a direction characterized by high Cholesterol and Platelet levels, and low Prothrombin Time. This axis is likely separated by how each of the measures relates to coagulation, or clotting, of the blood. The side with Cholesterol and Platelets is indicative of coagulation, or values for which an increase represents more coagulation. The side with Prothrombin Time represents values or measures that, when increased, is indicative of anticoagulation.
+
+```{r}
+#get reproduced correlation matrix
+repro3 <- cirrfact3$loadings%*%t(cirrfact3$loadings)
+#residual correlation matrix
+resid3 <- cor(cirrhosis2)-repro3
+round(resid3, 2)
+
+#get root-mean squared residuals - again, in output above
+len <- length(resid3[upper.tri(resid3)])
+RMSR3 <- sqrt(sum(resid3[upper.tri(resid3)]^2)/len)
+RMSR3
+
+#get proportion of residuals greater than 0.05 in absolute value
+paste0(round(sum(rep(1, len)[abs(resid3[upper.tri(resid3)])>0.05])/len*100),"%")
+```
+
+Interestingly, while plots looked almost the same between iterative and non-iterative PCA, meaning that the axes were likely describing similar factors, the fit of the iterative PCA is a lot better as an extraction method. When running a PCA with iteration, we see that the RMSR (Root Mean Square Residual) is 0.0415. The percent of residuals that are greater than 0.05 is 19%, meaning that there are much fewer residuals that are not explained by the factors presented in this extraction method.
+
+### Iterative PAF
+```{r}
+cirrfact4 <- factor.pa(cirrhosis2, nfactors = 2, SMC = TRUE, max.iter = 1000, 
+    rotate = "none")
+cirrfact4$loadings
+```
+
+```{r}
+plot(cirrfact4$loadings[,c(1,2)], pch = 18, col = 'red', 
+     main = "Iterative PAF Plot for 2 Factor Analysis, Components 1 and 2")
+abline(h = 0)
+abline(v = 0)
+text(cirrfact4$loadings[,c(1,2)], labels = names(cirrhosis2), cex = 0.8)
+```
+
+Compared to the non-iterative PAF plot, the iterative PAF plot looks very similar, if not identical. There were no recognizable differences in the results that could be compared between the two extraction methods.
+
+As such, the interpretations remain very similar, if not identical:
+
+Factor 1 describes a direction with high levels of Bilirubin, SGOT, Copper, Cholesterol, Triglycerides, Alkaline Phosphatase, and Prothrombin Time, but low levels of Platelets and Albumin (or vice versa). In context of the dataset, this axis likely describes how far the cirrhosis has progressed in an individual, measured through the stage of cirrhosis. The side with Bilirubin is a higher stage (Stage 4), while the side with Albumin is a lower stage (Stage 1, 2, or 3).
+
+Factor 2 describes a direction characterized by high Cholesterol and Platelet levels, and low Prothrombin Time. This axis is likely separated by how each of the measures relates to coagulation, or clotting, of the blood. The side with Cholesterol and Platelets is indicative of coagulation, or values for which an increase represents more coagulation. The side with Prothrombin Time represents values or measures that, when increased, is indicative of anticoagulation.
+
+```{r}
+#get reproduced correlation matrix
+repro4 <- cirrfact4$loadings%*%t(cirrfact4$loadings)
+#residual correlation matrix
+resid4 <- cor(cirrhosis2)-repro4
+round(resid4, 2)
+
+#get root-mean squared residuals - again, in output above
+len <- length(resid4[upper.tri(resid4)])
+RMSR4 <- sqrt(sum(resid4[upper.tri(resid4)]^2)/len)
+RMSR4
+
+#get proportion of residuals greater than 0.05 in absolute value
+paste0(round(sum(rep(1, len)[abs(resid4[upper.tri(resid4)])>0.05])/len*100),"%")
+```
+
+Interestingly, while plots looked almost the same between iterative and non-iterative PAF, meaning that the axes were likely describing similar factors, the fit of the iterative PAF is noticably better. When running a PAF with iteration, we see that the RMSR (Root Mean Square Residual) is 0.0414. The percent of residuals that are greater than 0.05 is 19%, meaning that there are fewer residuals that are not explained by the factors presented in this extraction method.
+
+### Maximum Likelihood
+``` {r}
+cirrfact5 <- factanal(cirrhosis2, rotation = "none", factors = 2)
+cirrfact5
+```
+
+```{r}
+plot(cirrfact5$loadings[,c(1,2)], pch = 18, col = 'red', 
+     main = "Maximum Likelihood Plot for 2 Factor Analysis, Components 1 and 2")
+abline(h = 0)
+abline(v = 0)
+text(cirrfact5$loadings[,c(1,2)], labels = names(cirrhosis2), cex = 0.8)
+```
+
+Finally, the Maximum Likelihood plot looks slightly different compared to the other plots. For one, SGOT, Copper, and Bilirubin are shifted up on the Factor 2 axis, and Cholesterol is higher than Platelets on the same axis (which is not true for the other plots). Additionally, Alkaline Phosphatase is lower than Triglycerides on the Factor 1 axis, the opposite of which is true in the other extraction methods. While there are some differences, the interpretation remains the same:
+
+Factor 1 describes a direction with high levels of Bilirubin, SGOT, Copper, Cholesterol, Triglycerides, Alkaline Phosphatase, and Prothrombin Time, but low levels of Platelets and Albumin (or vice versa). In context of the dataset, this axis likely describes how far the cirrhosis has progressed in an individual, measured through the stage of cirrhosis. The side with Bilirubin is a higher stage (Stage 4), while the side with Albumin is a lower stage (Stage 1, 2, or 3).
+
+Factor 2 describes a direction characterized by high Cholesterol and Platelet levels, and low Prothrombin Time. This axis is likely separated by how each of the measures relates to coagulation, or clotting, of the blood. The side with Cholesterol and Platelets is indicative of coagulation, or values for which an increase represents more coagulation. The side with Prothrombin Time represents values or measures that, when increased, is indicative of anticoagulation. 
+
+```{r}
+#get reproduced correlation matrix
+repro5 <- cirrfact5$loadings%*%t(cirrfact5$loadings)
+#residual correlation matrix
+resid5 <- cor(cirrhosis2)-repro5
+round(resid5, 2)
+
+#get root-mean squared residuals - again, in output above
+len <- length(resid5[upper.tri(resid5)])
+RMSR5 <- sqrt(sum(resid5[upper.tri(resid5)]^2)/len)
+RMSR5
+
+#get proportion of residuals greater than 0.05 in absolute value
+paste0(round(sum(rep(1, len)[abs(resid5[upper.tri(resid5)])>0.05])/len*100),"%")
+```
+
+When running Maximum Likelihood Analysis, we see that the RMSR (Root Mean Square Residual) is 0.0457. The percent of residuals that are greater than 0.05 is 25%, meaning that there are a decent number of residuals that are not explained by the factorss presented in this extraction method.
+
+
+Overall, we want to choose an extraction method that has a low RMSR and a low percent of residuals greater than 0.05, because that means that the extraction method is able to use two factors to analyze the data and map the underlying factors onto the indicators and explain the variance in the data. Below are the different tested extraction methods, with the associated RMSR and residual > 0.05 percentages:
+
+Non-iterative PCA: 0.104, 64%
+Non-iterative PAF: 0.0452, 25%
+Iterative PCA: 0.0415, 19%
+Iterative PAF: 0.0414, 19%
+Maximum Likelihood: 0.0457, 25%
+
+As such, since iterative PAF and iterative PCA have the lowest RMSR and residual > 0.05 percentages, they are the best method to use for extraction of factors for this dataset. However, since these two methods are so close together in terms of these values, it is very hard to separate between them and decide which to use.
+
+``` {r}
+cirrfact3
+cirrfact4
+```
+
+We then looked at other ways to differentiate between the different methods. After looking at the Tucker-Lewis Index (which compares the fit of the extraction method with a baseline model to determine how strong it is, a higher value being better), both iterative PCA and PAF have almost the same exact values, iterative PCA having a value of 0.893 and iterative PAF having a value of 0.895. The RMSEA index, or the root mean square error of approximation, measures the extraction model against a perfect model, with a lower value being better. Iterative PCA has an RMSEA index of 0.077, while iterative PAF has an RMSEA index of 0.076.
+
+If we were forced to choose, iterative PAF seems to be very marginally better than iterative PCA, but not by much. This makes sense when considering the original non-iterative methods, as the non-iterative PCA has a much worse fit than the non-iterative PAF. However, for the sake of better understanding the data, we opt to analyze and rotate both of these extraction methods.
+
+## Question 6
+
+Unfortunately, due to the limitations of the factor.pa() function in R, the only possible rotations to do are Varimax and Promax. Unlike Varimax and Quartimax (which we originally intended to do), which are both orthogonal rotations, Promax is an oblique rotation. Oblique rotations mean that the factors are correlated, while orthogonal rotations assume that the factors are uncorrelated. In some respects, it may be interesting to see if a rotation assuming the variables are correlated can provide new information about the data that cannot be seen otherwise, so we will try both rotations just for the sake of deeper understanding.
+
+### Iterative PCA
+
+```{r}
+cirrfact3v <- factor.pa(cirrhosis2, nfactors = 2, SMC = FALSE, max.iter = 1000,
+     rotate = "varimax")
+print("Varimax")
+cirrfact3v$loadings
+
+cirrfact3p <- factor.pa(cirrhosis2, nfactors = 2, SMC = FALSE, max.iter = 1000, 
+     rotate = "promax")
+print("Promax")
+cirrfact3p$loadings
+```
+
+```{r}
+plot(cirrfact3v$loadings[,c(1,2)], pch = 18, col = 'red', 
+     main = "Iterative PCA Plot for 2 Factor Analysis, Varimax")
+abline(h = 0)
+abline(v = 0)
+text(cirrfact3v$loadings[,c(1,2)], labels = names(cirrhosis2), cex = 0.8)
+
+plot(cirrfact3p$loadings[,c(1,2)], pch = 18, col = 'red', 
+     main = "Iterative PCA Plot for 2 Factor Analysis, Promax")
+abline(h = 0)
+abline(v = 0)
+text(cirrfact3p$loadings[,c(1,2)], labels = names(cirrhosis2), cex = 0.8)
+```
+
+When looking at these two rotations, the plots look almost the exact same, with some shifting of the variables and the axes. There are undoubtedly differences when compared to the plot with no rotations. Thankfully, the analyses are very similar to the preliminary analyses made in Question 5, which we will reiterate once again (with more detail, as there are changes to be addressed).
+
+The first direction/axis likely represents a factor for how far the cirrhosis has progressed in an individual, measured through the stage of cirrhosis. Looking at the boxplots printed at start of the document, we can explain the trends seen in this dataset. On the right side of the graph are the indicators that are correlated with a higher stage of cirrhosis (Stage 3 and 4), as the indicators have much higher values for individuals in a later stage of cirrhosis. Alternatively, the indicators on the left side of the graph are more likely correlated with a lower stage of cirrhosis (Stage 1, 2 and 3). For example, Albumin levels are higher in lower stages of cirrhosis than they are in higher stages which makes sense for why it is on the opposite side of the plot. One thing to note is that the interpretation of "high stage" is somewhat variable, as individuals in Stage 3 can be classified as either in high or low stage due to their status as an intermediate level of cirrhosis.
+
+The second direction/axis likely represents a factor related to the coagulation of blood. The upper end of the axis, with Platelets, are for values that correlate with high rates of coagulation. Cholesterol has been shown to help with clotting as well, but it is strange that albumin, which has been commonly been considered in scientific literature regarding heart disease to be an anti-coagulant, is also on the upper part of the axis. It is possible that there may be some flaw in the way the data was collected, or that there are other properties with how Albumin reacts with clotting in a liver/cirrhosis setting that need to explained in more detail through scientific literature. On the bottom of the axis are indicators related with anti-coagulation. Prothrombin Time measures how long it takes for a blood to clot in a sample, which is why an increased Prothrombin Time leads to anti-coagulation, and puts it far on the opposite side of the graph compared to Platelets. The other factors found at the bottom of the graph, like SGOT, Copper, and Bilirubin, have been correlated with or directly cause a decrease in coagulation.
+
+### Iterative PAF
+```{r}
+cirrfact4v <- factor.pa(cirrhosis2, nfactors = 2, SMC = TRUE, max.iter = 1000, 
+    rotate = "Varimax")
+cirrfact4v$loadings
+
+cirrfact4p <- factor.pa(cirrhosis2, nfactors = 2, SMC = TRUE, max.iter = 1000, 
+    rotate = "promax")
+cirrfact4p$loadings
+```
+
+```{r}
+plot(cirrfact4v$loadings[,c(1,2)], pch = 18, col = 'red', 
+     main = "Iterative PAF Plot for 2 Factor Analysis, Varimax")
+abline(h = 0)
+abline(v = 0)
+text(cirrfact4v$loadings[,c(1,2)], labels = names(cirrhosis2), cex = 0.8)
+
+plot(cirrfact4p$loadings[,c(1,2)], pch = 18, col = 'red', 
+     main = "Iterative PAF Plot for 2 Factor Analysis, Promax")
+abline(h = 0)
+abline(v = 0)
+text(cirrfact4p$loadings[,c(1,2)], labels = names(cirrhosis2), cex = 0.8)
+```
+
+These two graphs are very different from each other, which shows that the nature of the rotations shows two different factors in the data. Some notable differences include:
+
+- In the Varimax Plot, Platelets is more to the left compared to Prothrombin on the direction of PA1, while in Promax it is the opposite.
+- There seems to be a very interesting rotation of the cluster of the indicators Cholesterol, Bilirubin, SGOT, Copper, Triglycerides, Alkaline Phosphatase, as in the Promax rotated plot, the cluster seems to be a clockwise rotation of where it was in the Varimax plot around the origin (or some point in that general region).
+
+Generally speaking, we see a very similar trend regarding the first direction/factor on both graphs. As in the rotated plots for Iterative PCA, the first factor likely describes the Stage/severity of cirrhosis in the individual. For brevity, we will just rehash the important parts, rather than going deep into the details for these plots that are pretty much the same as the ones seen in the Iterative PCA plots. Primarily, we can see that the left side is characterized by indicators that have a higher value at a lower stage of cirrhosis (like Albumin), while the right side of the axis is characterized by indicators that have a higher value at a higher stage of cirrhosis (like Bilirubin). Although there are changes across both plots, the general direction/location of the indicator variables is somewhat consistent across both plots, and is consistent with this description of the rotated plot.
+
+The second factor also has a similar trend in both graphs, which is the same trend shown in the Iterative PCA graph. The second direction/axis likely represents a factor related to the coagulation of blood. The upper end of the axis, with Platelets, are for values that correlate with high rates of coagulation. As from above, Cholesterol has been shown to help with clotting as well, but it is strange that Albumin, which has been commonly been considered in scientific literature regarding heart disease to be an anti-coagulant, is also on the upper part of the axis. On the bottom of the axis are indicators related with anti-coagulation. Prothrombin Time measures how long it takes for a blood to clot in a sample, which is why an increased Prothrombin Time leads to anti-coagulation, and puts it far on the opposite side of the graph compared to Platelets. The other factors found at the bottom of the graph, like SGOT, Copper, and Bilirubin, have been correlated with or directly cause a decrease in coagulation. While there are some factors that are in the middle that shift significantly over both rotations (like Alkaline Phosphatase and Triglycerides), after reviewing the literature, they do not have a very strong correlation with clotting, at least not as much as Prothrombin Time and Platelets. 
+
+The reason for the differences in these two plots might be because of the nature of the rotation done. Since Promax assumes that there are correlations between the variables and Varimax assumes that there are no correlations between the variables, it makes sense they give different plots and different loadings when rotated. 
+
+## Question 7
+
+Through factor analysis, we were able to conclude that two factors suffices for understanding the common variables/factors that cause variability in the data. Through many different methods, we were able to show that not only was factor analysis worth running on this dataset, but that two factors is the best choice for factor analysis for this dataset. After running the many extraction methods, we concluded that the iterative PCA and iterative PAF results are the best choices to extract factors for this data. Unfortunately, there are no strong ways to distinguish which of the two methods is better for factor analysis, as all of the measures that would have been useful in determining the better metric are too close to make a confident conclusion.
+
+After running factor analysis and conducting two different rotations (Varimax and Promax) on the data after deciding on the two extraction methods, we were able to make conclusions about the factors underlying the data. First, we concluded that the most important factor (which is decided because it is the first factor of the two) simply differentiates the data based on if they are elevated in individuals with high or low levels of cirrhosis. This makes sense, as the stage of cirrhosis is the most important determinant on the different indicator values that are found in an individual; depending on how far the cirrhosis has progressed, there may be more liver damage and related body system failure that leads to the changes in the indicator values described in this analysis. The second factor describes the effects of coagulation on the different indicator variables. High levels of coagulation are correlated with variables like Platelets and Cholesterol, while low levels of coagulation are related with variables like Prothombin Time. This makes sense, as in liver diseases there tends to be a significant change in the body's ability to clot, meaning that the differences in these variables with respect to their ability/function as coagulants or anti-coagulants is especially important.
+
+Of course, there are some variables that defy the trends described in factors 1 and 2, like how Albumin is in the side of coagulants when it is scientifically shown to be an anti-coagulant. This discrepancy, as well as other changes across variables and graphs, may be because of an error in data collection, or may suggest that there are some properties of these variables that are not yet well understood that give it properties as described in this factor analysis. Regardless, it warrants future research about these variables, whether basic science or just using another dataset to confirm if these results found through factor sets are legitimate or just an anomaly.

@@ -1,0 +1,1097 @@
+---
+title: "S&DS 363 Homework 6"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+date: "April 15th, 2023"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn=-1)
+```
+Names: Dinesh Bojja and Jonah Bahr
+
+S&DS 363: Homework 6 Ordination
+
+## Libraries:
+```{r, include = FALSE}
+library(MASS)
+library(biotools)
+library(klaR)
+library(car)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(ggExtra)
+library(heplots)
+library(ks)
+library(outliers)
+library(stringr)
+library(vegan)
+library(fpc)
+library(aplpack)
+library(cluster)
+library(fpc)
+library(ape)
+library(amap)
+library(NbClust)
+library(clValid)
+library(factoextra)
+library(vegan3d)
+library(mgcv)
+library(rgl)
+library(scatterplot3d)
+```
+
+## Preliminaries:
+```{r}
+#color palettes
+colors <- c("#ff2d00",
+            "#66BD63",
+            "#0026ff",
+            "#FDAE61",
+            "#D9EF8B",
+            "#ffc500",
+            "#e800ff",
+            "#00b2ff",
+            "#9700ff",
+            "#7c0a62"
+)
+
+#download dataset
+cirrhosis <- read.csv("cirrhosis.csv", header = TRUE)
+cirrhosis$Status = as.factor(cirrhosis$Status)
+cirrhosis$Drug = as.factor(cirrhosis$Drug)
+cirrhosis$Sex = as.factor(cirrhosis$Sex)
+cirrhosis$Stage = as.factor(cirrhosis$Stage)
+head(cirrhosis)
+names(cirrhosis)
+```
+
+Description of dataset: Cirrhosis is a late stage of scarring of the liver caused by many types of liver diseases and conditions, such as hepatitis and chronic alcoholism. Our data was collected by a Mayo Clinic trial in primary biliary cirrhosis (PBC) of the liver conducted between 1974 and 1984.  In the dataset, we find information on the following attributes for patients with cirrhosis: Status, Drug, Age, Sex, Ascites, Hepatomegaly, Spiders, Edema, Bilirubin, Cholesterol, Albumin, Copper, Alk_Phos, SGOT, Triglycerdies, Platelets, Prothrombin, and Stage.
+
+## Data Transformations and Prerequisites
+
+``` {r}
+#qqplots for raw data
+qqPlot(cirrhosis$Bilirubin, col= colors[factor(cirrhosis$Stage)],pch=16,
+    main = "QQ-Plot for Raw Bilirubin Level Data",
+    ylab = "Bilirubin Level (mg/dl)")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis$Cholesterol, col= colors[factor(cirrhosis$Stage)],pch=16,
+    main = "QQ-Plot for Raw Cholesterol Data",
+    ylab = "Serum Cholesterol Level (mg/dL)")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis$Albumin, col= colors[factor(cirrhosis$Stage)],pch=16,
+    main = "QQ-Plot for Raw Albumin Data",
+    ylab = "Albumin Level (gm/dL)")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis$Copper, col= colors[factor(cirrhosis$Stage)],pch=16,
+    main = "QQ-Plot for Raw Copper Data",
+    ylab = "Urine Copper Level (ug/day)")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis$Alk_Phos, col= colors[factor(cirrhosis$Stage)],pch=16,
+    main = "QQ-Plot for Raw Alkaline Phosphatase Data",
+    ylab = "Alkaline Phosphatase Level (U/liter)")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis$SGOT, col= colors[factor(cirrhosis$Stage)],pch=16,
+    main = "QQ-Plot for Raw SGOT Data",
+    ylab = "SGOT Level (U/mL)")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis$Tryglicerides, col= colors[factor(cirrhosis$Stage)],pch=16,
+    main = "QQ-Plot for Raw Triglycerides Data",
+    ylab = "Trigliderides Level (mg/dl)")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis$Platelets, col= colors[factor(cirrhosis$Stage)],pch=16,
+    main = "QQ-Plot for Raw Platelets Data",
+    ylab = "Platelets Level (mL/1000)")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis$Prothrombin, col= colors[factor(cirrhosis$Stage)],pch=16,
+    main = "QQ-Plot for Raw Prothrombin Data",
+    ylab = "Prothrombin Time (s)")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+#chi-square plot for raw data
+cqplot(cirrhosis[c("Bilirubin", 
+    "Cholesterol", "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", 
+    "Platelets", "Prothrombin")], 
+    main = "Chi-Square Plot of Raw Data")
+```
+
+Although the data is not multivariate normal, this is not a condition for ordination, so it is not required to fix it. Regardless, we tried transforming the data initially but found that it messed with the multidimensional scaling and the detrended correspondence analysis. Thus, we opted to run ordination on the non-transformed data, as it allowed for more effective analysis. We included the MDS calculations that showed the ineffectiveness of the transformed data in Appendix 1.
+
+Since there are a very large number of individuals in the analysis, we will try taking a smaller sample of the individuals in the study and run concurrent ordination analyses. We hope to see if there are any differences between the results using the complete and subsetted data. To make the subset, we opted to take an equal number of individuals from each group, as it would make understanding the trends between the different groups easier. Taking just 2 individuals from Stage 1, for instance, would likely under represent the group too much, to the point where adjusting the original proportions would likely be even more fruitful for understanding the data.
+
+``` {r}
+set.seed(20)
+
+cirrdata <- cirrhosis[, c(11:19)]
+cirrenv <- cirrhosis[, c(2,5)]
+
+cirrstage1 <- cirrhosis[which(cirrhosis$Stage == 1),]
+cirrstage2 <- cirrhosis[which(cirrhosis$Stage == 2),]
+cirrstage3 <- cirrhosis[which(cirrhosis$Stage == 3),]
+cirrstage4 <- cirrhosis[which(cirrhosis$Stage == 4),]
+
+cirrsample <- rbind(cirrstage1, sample_n(cirrstage2, 10), 
+    sample_n(cirrstage3, 10), sample_n(cirrstage4, 10))
+cirrdata2 <- cirrsample[, c(11:19)]
+cirrenv2 <- cirrsample[, c(2,5)]
+```
+
+## Question 1
+
+Correspondence analysis is a way to plot the relative positions of rows and columns of a dataset onto one plot and glean which columns and rows are most similar to each other. Through this analysis, we can see which individuals and groups are more closely associated with changes in different variables. Correspondence analysis finds a weighted average of the values in each column across rows, and vice versa, to get column and row weights. These weights are then scaled, then weighted again, and the process is repeated until there are no more deviations in the row and column weights, the result of which are the weights for the first CA axis. The process is then repeated, inserting a term to remove the effect of the first CA axis, to generate the next CA axis (so on and so forth).
+
+By using correspondence analysis on our dataset, we hope to see if there are significant relationships between the different blood factors (particularly, Bilirubin, Cholesterol, Albumin, Copper, Alk_Phos, SGOT, Triglycerdies, Platelets, and Prothrombin) measured in each individual and the stage of their cirrhosis; this way, we can determine if any variables are more likely to be determining factors in whether someone's cirrhosis is at a higher stage or not, and a good metric to predict and analyze a random individual's cirrhosis stage as well.
+
+``` {r}
+#correspondence analysis
+cirrcca <- cca(cirrdata)
+summary(cirrcca)
+
+#detrended correspondence analysis
+cirrdca <- decorana(cirrdata)
+summary(cirrdca)
+```
+
+``` {r}
+#correspondence analysis
+cirrcca2 <- cca(cirrdata2)
+summary(cirrcca2)
+
+#detrended correspondence analysis
+cirrdca2 <- decorana(cirrdata2)
+summary(cirrdca2)
+```
+
+Through the CA, we were able to get the total inertia and the proportion of explanation of the scaled chi-squared statistic for each CA axis (which is analyzed in question 2).
+
+After running the correspondence analyses, we also run detrended correspondence analyses for the complete dataset and the subset, which fixes any arching of the dataset caused by the second CA axis being a function of the first. This is done by segmenting the CA plot and readjusting the points and segments. Since this removes any meaning to the eigenvalues found in CA, and because the number of segments that are used is arbitrary, DCA is really only beneficial to see the data more clearly, and not worthwhile for any further numerical analysis.
+
+## Question 2
+
+When looking at the correspondence analysis, detrended and not detrended, the total inertia comes out to be roughly 0.1786 for the complete dataset. For the subset of the dataset, we get a total inertia of about 0.1791. The total inertia is equal to the sum of the sum of square eigenvalues, or the chi-squared statistic divided by the population size. In effect, inertia can be used to measure variance, or how far the data departs from the independence model.
+
+We hope to see that the first few CA ordination directions explain most of the inertia. For the complete dataset, we find that CA1 explains a proportion of 0.6157 of the scaled chi-square (which is directly related to inertia), and CA2 explains a proportion of 0.16279. Together, they explain a proportion of 0.77847 of the inertia, which is already explaining a relatively high proportion of the variance; adding in CA3 (which has a proportion explained of 0.11444) brings the total inertia explained up to 0.89291. This means that most of the variance can be explained by the first two or three CA directions, proving their significance.
+
+The same can be said for the subset of the data. We find that CA1 explains a proportion of 0.49010 of the scaled chi-square and CA2 explains a proportion of 0.19625. Together, they explain a proportion of 0.68635 of the inertia, which is not as high as it was for the complete dataset but still pretty high; adding in CA3 (which has a proportion explained of 0.14612) brings the total inertia explained up to 0.83247. This means that most of the variance in the subset can be explained by the first two or three CA directions, proving their significance.
+
+``` {r}
+plot(cirrcca, main = "Correspondence Analysis Plot for Cirr. Data", type = "n")
+points(cirrcca, pch = 21, bg = colors[factor(cirrhosis$Stage)], cex = 1.0)
+text(cirrcca, "species", col = "purple", cex = 0.8)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+plot(cirrdca, main = "Detrended Correspondence Analysis Plot for Cirr. Data", 
+    type = "n")
+points(cirrdca, pch = 21, bg = colors[factor(cirrhosis$Stage)], cex = 0.8)
+text(cirrdca, "species", col = "purple", cex = 0.7)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+plot(cirrdca, xlim=c(-1,1), ylim=c(-0.5,0.5), 
+    main = "Detrended CA Plot for Cirr. Data (Closeup)", 
+    type = "n")
+points(cirrdca, pch = 21, bg = colors[factor(cirrhosis$Stage)], cex = 1.2)
+text(cirrdca, "species", col = "purple", cex = 1.0)
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+```
+
+``` {r}
+plot(cirrcca2, main = "Correspondence Analysis Plot for Cirr. Data Subset", 
+    type = "n")
+points(cirrcca2, pch = 21, bg = colors[factor(cirrsample$Stage)], cex = 1.2)
+text(cirrcca2, "species", col = "purple", cex = 0.8)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+plot(cirrdca2, main = "Detrended Correspondence Analysis Plot for Cirr. Data Subset", 
+    type = "n")
+points(cirrdca2, pch = 21, bg = colors[factor(cirrsample$Stage)], cex = 0.8)
+text(cirrdca2, "species", col = "purple", cex = 0.7)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+plot(cirrdca2, xlim=c(-1,1), ylim=c(-0.5,0.5), 
+    main = "Detrended CA Plot for Cirr. Data Subset (Closeup)", 
+    type = "n")
+points(cirrdca2, pch = 21, bg = colors[factor(cirrsample$Stage)], cex = 1.2)
+text(cirrdca2, "species", col = "purple", cex = 0.9)
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+```
+
+Since we will cover snaking and movement between different stages of cirrhosis in Question 3, we will focus on the relationship between the rows and columns in these graphs here.
+
+Unfortunately, while the CA plots are very useful in understanding the snaking and relationship between the different groups, it does not seem to be very useful to understand the relationship between the different stages and the measures of blood factors. We can see that when using either the dataset or the subset, most of the variables are clustered together closer to the regions associated with Stage 1 and Stage 2 cirrhosis, while two variables (Bilirubin and Copper) trend a little closer to the individuals with higher stages of cirrhosis.
+
+The relationships are much clearer to see in the DCA, where we can look at the direction of the different variables to understand their relationship with the different species. In both graphs, DCA2 helps differentiate between most of the different variables, which allows for better understanding of their relationship with the different groups (Alkaline Phosphatase, on the other hand, is differentiated by DCA1). We can see that in both the complete dataset and the subset, Copper, Bilirubin, SGOT, Triglycerides, and Prothrombin all are in the direction marked by the presence of individuals in Stage 4 of cirrhosis; this means that these variables are likely correlated (in decreasing strength, based on how high they are on the DCA2 axis) with end-stage cirrhosis. Albumin, Cholesterol, and Platelets are more likely correlated with Stage 3 of cirrhosis, while Alkaline Phosphatase is likely closely correlated with Stage 1/2 of cirrhosis.
+
+## Question 3
+``` {r}
+#3d plot
+cirrcca.x <- cirrcca[["CA"]][["u"]][,1]
+cirrcca.y <- cirrcca[["CA"]][["u"]][,2]
+cirrcca.z <- cirrcca[["CA"]][["u"]][,3]
+
+scatterplot3d(cirrcca.x, cirrcca.y, cirrcca.z,
+    xlab = "CA1",
+    ylab = "CA2",
+    zlab = "CA3",
+    main = "3D Scatterplot of Cirrhosis Data Under Correspondence Analysis",
+    color = colors[factor(cirrhosis$Stage)], 
+    angle = 250,
+    type="h")
+legend(2.8,5.9,
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors,
+    inset = -0.06,
+    bty = "n")
+
+cirrcca.x <- cirrcca[["CA"]][["u"]][,1]
+cirrcca.y <- cirrcca[["CA"]][["u"]][,2]
+cirrcca.z <- cirrcca[["CA"]][["u"]][,3]
+
+scatterplot3d(cirrcca.x, cirrcca.y, cirrcca.z,
+     xlab = "CA1",
+     ylab = "CA2",
+     zlab = "CA3",
+     main = "3D Scatterplot of Cirrhosis Data Under Correspondence Analysis",
+     color = colors[factor(cirrhosis$Stage)], 
+     angle = 250,)
+legend(2.8,5.9,
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors,
+    inset = -0.06,
+    bty = "n")
+
+cirrcca.x2 <- cirrcca2[["CA"]][["u"]][,1]
+cirrcca.y2 <- cirrcca2[["CA"]][["u"]][,2]
+cirrcca.z2 <- cirrcca2[["CA"]][["u"]][,3]
+
+scatterplot3d(cirrcca.x2, cirrcca.y2, cirrcca.z2, 
+    xlab = "CA1",
+    ylab = "CA2",
+    zlab = "CA3",
+    main = "3D Scatterplot of Cirr. Data Subset Under Correspondence Analysis",
+    color = colors[factor(cirrsample$Stage)], 
+    angle = 280,
+    type="h")
+legend(-2.1,9.3,
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors,
+    inset = -0.06,
+    bty = "n")
+```
+
+We can see that there is some snaking of the data when presented in the graphs showing the first two CA directions. The data can be traced from higher stages to lower stages by following the colors of the points plotted on each graph. Yellow represents Stage 4, or the highest stage of cirrhosis, while Red represents Stage 1, or the mildest stage of cirrhosis. Blue represents Stage 3, while Green represents Stage 2. Starting from the top of the CA plot, the points for Stage 4 start going lower, slowly transitioning into points that mark Stage 3. At the bottom, there is a high proportion of individuals who have Stage 2, and the points go up a little to the red points that have Stage 1 cirrhosis. 
+
+We can see this trend even more clearly in a 3D scatterplot of the data; the Stage 4 points increase in the first direction and third direction while decreasing in the second, then reach a cluster of Stage 3 points. These decrease in the first direction, while staying relatively constant in the third direction. Finally, this trajectory reaches the Stage 2 and Stage 1 points.
+
+Similar snaking patterns can be seen in the 2D and 3D plots for the first 2/3 CA directions when looking at the subset data, albeit less pronounced compared to the full dataset. There is definitely still a similar trend moving from high to low stages of cirrhosis, which can be seen in both the two-dimensional and the three-dimensional graphs. 
+
+This pattern of snaking makes sense in the context of the dataset. The data being analyzed in this part of the dataset looks at several different factors in a person's blood and how they are affected by the stage of the individual's cirrhosis. Thus, it would logically follow that as the stage increases or decreases, different factors in the blood will be affected in different ways at different rates, which would lead to the transition between stages seen in these graphs. Additionally, we would expect the data to not look linear in even higher dimensional space, as the rate by which these different variables/factors change across stages does not stay constant, meaning an assumption of linearity is likely flawed. There would likely be movement in different CA directions that correspond to the effect of different variables, which would act differently upon each stage and individual and remove any linear trends in multidimensional space.
+
+## Question 4
+
+Based off of the plotting of the Correspondence Analysis and Detrended Correspondence Analysis for the raw data found in question one, it's simple to say that the DCA graph was more useful. The CA plot did not show much use considering that the vast majority of the variables (except for Copper and Bilirubin) were concentrated in the middle of the graph; this means that trying to find an association between variables and stages of cirrhosis would be extremely difficult. It is also not helped by the fact that a large number of the individual points were also concentrated primarily in the center—meaning that there was not a lot to analyze in relation to CA1 and CA2 changes between stages. It seems only a glimpse of association between variables and stages can be seen when we find that Stage 4 trends upwards in the direction characterized by CA2.
+
+On the other hand, the Detrended Correspondence Analysis plot was more useful, as it provided more separation between variables—that is, on DCA1 we find horizontal separation between Alkaline Phosphatase and the rest of the factors. As for DCA2, we find vertical separation between the blood factors, which allows us to match the general concentration of points for each stage with variables based on their proximity to each other.
+
+With this said, Copper, Bilirubin, SGOT, Triglycerides, and Prothrombin all are in the direction marked by the presence of individuals in Stage 4 of cirrhosis. Albumin, Cholesterol, and Platelets are more likely correlated with Stage 3 of cirrhosis, while Alkaline Phosphatase is likely closely correlated with Stage 1/2 of cirrhosis.  
+
+From the snaking from Question 3, we find that through different stages, different factors in the blood will be affected in different ways at different rates, which would lead to the transition between stages seen in these graphs found in CA and DCA analysis. We expect there to be higher trends in multidimensional space that lead to the variable trends seen in the plot.
+
+## Question 5
+
+``` {r}
+results <- matrix(NA, 21, 3)
+# #j is number of dimensions to try
+for (j in 1:3){
+   for (i in 1:20){
+     temp <- cirrdata[shuffle(nrow(cirrdata)), 1]
+     for (k in 2:12) {temp <- cbind(temp, cirrdata[shuffle(nrow(cirrdata)), k]) }
+     #store stress
+     results[i, j] <- metaMDS(temp, k = j, distance = "euclidean")$stress
+   }
+   results[21, j] <- metaMDS(cirrdata, k = j, distance = "euclidean")$stress
+ }
+```
+
+``` {r}
+results2 <- matrix(NA, 21, 3)
+# #j is number of dimensions to try
+for (j in 1:3){
+   for (i in 1:20){
+     temp <- cirrdata2[shuffle(nrow(cirrdata2)), 1]
+     for (k in 2:12) {temp <- cbind(temp, cirrdata2[shuffle(nrow(cirrdata2)), k]) }
+     #store stress
+     results2[i, j] <- metaMDS(temp, k = j, distance = "euclidean")$stress
+   }
+   results2[21, j] <- metaMDS(cirrdata2, k = j, distance = "euclidean")$stress
+ }
+```
+
+We ran two different examples of metric multidimensional scaling, one with the full dataset and one with the subset. MDS, in essence, tries to distill the multidimensional plot into a model in fewer dimensions by trying to match the similarities/differences in the original dataset. To do this, the model calculates the distances/differences in each pair of individuals in the full dimensional model, ranking them from most to least different. Then, a random representation is taken in fewer dimensions, and the same distances between points is calculated and compared to the original, seeing how accurate this representation is to the original data. The least different lower-dimensional solution to the original is considered the best one, and is stored in the end.
+
+However, because this method is not based on eigenvectors, there is no guarantee that any result from MDS is the best possible solution. Thus, by running the analysis multiple times, it increases the probability that an acceptable solution is found. The MDS is set to try and find 1-dimensional, 2-dimensional, and 3-dimensional solutions for representing the data in fewer dimensions, which are solutions we can visualize.
+
+Here, we will include plots for the 2-dimensional and 3-dimensional solutions. However, we will save the analysis of these plots for Question 7, where we are asked to reproduce the plots one more time. 
+
+``` {r}
+#two dimensional solution
+cirrmds <- metaMDS(cirrdata, k = 2, distance = "euclidean")
+
+#more refined plot
+fig <- ordiplot(cirrmds, 
+    main = "NMDS Plot for Cirrhosis Data", 
+    type = "none", cex = 1.1)
+text(fig, "species", col = "purple", cex = 1.1)
+points(fig, "sites", col = colors[factor(cirrhosis$Stage)], cex = 0.8)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+```
+``` {r}
+#two dimensional solution
+cirrmds2 <- metaMDS(cirrdata2, k = 2, distance = "euclidean")
+
+#more refined plot
+fig2 <- ordiplot(cirrmds2, 
+    main = "NMDS for Cirrhosis Data Subset", 
+    type = "none", cex = 1.1)
+text(fig2, "species", col = "purple", cex = 1.1)
+points(fig2, "sites", col = colors[factor(cirrsample$Stage)], cex = 0.8)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+```
+``` {r}
+#three dimensional solution
+cirrmds3 <- metaMDS(cirrdata, k = 3, distance = "euclidean")
+
+#quick plot
+cirr.x <- cirrmds3$points[,1]
+cirr.y <- cirrmds3$points[,2]
+cirr.z <- cirrmds3$points[,3]
+
+```
+``` {r, include = FALSE}
+fig3 <- ordiplot3d(cirrmds3, display = "species", 
+    col = colors[factor(cirrhosis$Stage)])
+```
+
+``` {r}
+scatterplot3d(cirr.x, cirr.y, cirr.z, 
+    main = "3D Scatterplot of Cirrhosis Data Under NMDS", 
+    xlab = "NMDS1",
+    ylab = "NMDS2",
+    zlab = "NMDS3",
+    color = colors[factor(cirrhosis$Stage)])
+text(fig3, "sites", col = "purple", cex = 1.1)
+legend(5,5,
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    bty = "n",
+    col = colors)
+```
+
+``` {r}
+#three dimensional solution
+cirrmds4 <- metaMDS(cirrdata2, k = 3, distance = "euclidean")
+
+#quick plot
+cirr.x2 <- cirrmds4$points[,1]
+cirr.y2 <- cirrmds4$points[,2]
+cirr.z2 <- cirrmds4$points[,3]
+```
+
+``` {r, include = FALSE}
+fig4 <- ordiplot3d(cirrmds4, display = "species", col = colors[factor(cirrsample$Stage)])
+```
+
+``` {r}
+scatterplot3d(cirr.x2, cirr.y2, cirr.z2, 
+    main = "3D Scatterplot of Cirrhosis Data Subset Under NMDS",
+    color = colors[factor(cirrsample$Stage)])
+text(fig4, "sites", col = "purple", cex = 1.1)
+legend(5,5,
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    bty = "n",
+    col = colors)
+```
+
+## Question 6
+
+Stress is a measure of the difference between the pairwise differences of the original dataset and the pairwise differences of the reference distances. Kruskal Stress using a scaled verison of the sum of squared differences in the distance between two points in the original and lower-dimensional model. Basically, the lower the stress, the better the data, and the more fit the lower-dimensional model is to the original data. 
+
+``` {r}
+ plot(c(1:3), results[21, ], type = "b", col = "blue", lwd = 3,
+     ylim = c(0, max(results)), xlab = "Dimensions", ylab = "Stress", pch = 19,
+     main = "MDS for Cirr. Data, Euclidean Distance")
+ mins <- apply(results[1:20, ], 2, min)
+ maxs <- apply(results[1:20, ], 2, max)
+ meds <- apply(results[1:20, ], 2, median)
+
+ for (i in 1:5){
+     points(rep(i, 3), c(mins[i], meds[i], maxs[i]), type = "b", 
+         col = "red", lwd = 3, pch = 19)
+ }
+ legend(3.5, (.9*max(results)), c("MDS Solution", "20 Permutations"), 
+     lwd = 3, col = c("blue", "red"))
+```
+
+When we plot stress for the first three dimensions, we can see how much better each added dimension is at describing the dataset accurately. Obviously, one dimension is not very useful, as the stress is very high. Two dimensions is significantly better, with a stress of around 0.15 (as opposed to around 0.31 for one dimension). Adding yet another dimension only brings down the stress to around 0.12, which is better but not by much. For the sake of understanding and visualizing the data, this shows that two or three variables are both sufficient to distill and model what the data looks like in fewer dimensions, in a way that is easier to interpret. We can focus on the two-dimensional solution, as it is an elbow in the graph, but the third dimension may give some added information that is useful for understanding the data.
+
+``` {r}
+ plot(c(1:3), results2[21, ], type = "b", col = "blue", lwd = 3,
+      ylim = c(0, max(results2)), xlab = "Dimensions", ylab = "Stress", pch = 19,
+      main = "MDS for Cirr. Subset Data, Euclidean Distance")
+ mins <- apply(results2[1:20, ], 2, min)
+ maxs <- apply(results2[1:20, ], 2, max)
+ meds <- apply(results2[1:20, ], 2, median)
+
+ for (i in 1:5){
+     points(rep(i, 3), c(mins[i], meds[i], maxs[i]), type = "b", 
+         col = "red", lwd = 3, pch = 19)
+ }
+ legend(3.5, (.9*max(results2)), c("MDS Solution", "20 Permutations"), 
+     lwd = 3, col = c("blue", "red"))
+```
+
+The scree plot for the stress of the subset data also gives very similar results. The stress of the one-dimensional model is just below 0.3, which is quite high; adding another variable for a total of 2 variables gives a stress of around 0.13, which is far more acceptable and means that the model is more representative of the multivariate nature of the data subset. Three dimensions has an even lower stress (around 0.08), which means that it is even better, but is still comparable to two dimensions in terms of how useful it is to understanding the data.
+
+``` {r}
+stressplot(cirrmds, main = "Stressplot for 2D MDS on Complete Cirr. Dataset")
+stressplot(cirrmds3, main = "Stressplot for 3D MDS on Complete Cirr. Dataset")
+
+stressplot(cirrmds2, main = "Stressplot for 2D MDS on Cirr. Subset")
+stressplot(cirrmds4, main = "Stressplot for 3D MDS on Cirr. Subset")
+```
+
+We can also plot stressplots to see how strong the MDS solutions are. All of the solutions are, based on the R-squared values, very very strong, when looking at a Non-metric fit. However, it can be said without a doubt that adding a third dimension to the MDS solution increases the strength of the model and making it more accurate and representative of the distances between points in the original dataset. Given that these increases in strength are so minute, a two-imensional plot would suffice for the sake of understanding and interpreting the data, and for the purpose of distilling the multidimensional data into fewer dimensions. But, we will analyze both for the sake of completeness. 
+
+## Question 7
+
+``` {r}
+#more refined plot
+fig <- ordiplot(cirrmds, 
+      main = "NMDS Plot for Cirrhosis Data",
+      type = "none", cex = 1.1)
+text(fig, "species", col = "purple", cex = 1.1)
+points(fig, "sites", col = colors[factor(cirrhosis$Stage)], cex = 0.8)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+```
+
+After plotting the two-dimensional MDS results for the complete dataset, we can see some general trends about how the different variables relate to the different stages of cirrhosis. More individuals with Stage 3 and 4 cirrhosis are near the outskirts of the data (top, bottom, and left), showing that they have some significant deviation from the other stages of cirrhosis. 
+
+Changes in Bilirubin and Copper levels are more likely to be attributed to individuals with Stage 4 cirrhosis, as the variables are deeper into the regions with Stage 4 cirrhosis (and with some people with Stage 3 cirrhosis). Alkaline Phosphatase levels are more seen with select individuals who have Stage 3 cirrhosis, which is interesting considering that the people with Stage 3 cirrhosis are widely spread throughout the population. This suggests that some individuals in Stage 3 who are at the bottom of the graph have irregularly high Alkaline Phosphatase levels that causes the indviduals and the variable itself to be shifted that far. The rest of the variables (Tryglicerides, Prothombin, Platelets, SGOT, Albumin, and Cholesterol) are all deep in the cluster of individuals with lower stages of cirrhosis, meaning that these variables are more closely related to individuals with Stage 2 or Stage 1 cirrhosis.
+
+``` {r}
+scatterplot3d(cirr.x, cirr.y, cirr.z, 
+    main = "3D Scatterplot of Cirrhosis Data Under NMDS",
+    xlab = "NMDS1",
+    ylab = "NMDS2",
+    zlab = "NMDS3",
+    color = colors[factor(cirrhosis$Stage)], angle = 45)
+text(fig3, "sites", col = "purple", cex = 1.1)
+legend(4.8,5,
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    bty = "n",
+    col = colors)
+```
+
+The 3D NMDS plot for the complete dataset helps differentiate between the clusters much better. Here, we can see that Bilirubin is highly correlated with Stage 4 cirrhosis (Copper is as well, but it is off of the graph entirely), while the giant cluster is split across the third NMDS axis. SGOT and Cholesterol are higher up that axis, which is where fewer individuals with low-stage cirrhosis are centered. The rest of the variables are closer to the region where there are more people with Stage 1 and 2 cirrhosis instead. 
+
+
+``` {r}
+#more refined plot
+fig2 <- ordiplot(cirrmds2, 
+       main = "NMDS Plot for Cirrhosis Data Subset",
+       type = "none", 
+       cex = 1.1)
+text(fig2, "species", col = "purple", cex = 1.1)
+points(fig2, "sites", col = colors[factor(cirrsample$Stage)], cex = 0.8)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+```
+
+More or less, the clustered trends of the NMDS graph for the subset of individuals is very similar to the 2D NMDS plot for the complete dataset. Interestingly, the plot for the two-dimensional NMDS graph of the subset of individuals has some significant differences with regards to the blood factors. The biggest difference is that Alkaline Phosphatase is closer to the rest of the cluster, rather than being separated from the rest of the data. This suggests that the select individuals from before who had irregularly high Alkaline Phosphatase levels were not included in the subset. It is likely, then, that the variation in Alkaline Phosphatase is driven by a few outliers in the data who had irregularly high levels. 
+
+Another interesting difference is that Bilirubin and Copper are no longer in the same direction with regards to the data cluster; while in the complete dataset Bilirubin and Copper were both closer to the higher-stage cirrhosis patients in the same direction, now they both are individually closer to different people who have end-stage cirrhosis, in different directions. This could be because of the nature of the smaller dataset; outliers in just one individual make a much larger impact on the individual variable, which changes the nature of the plot itself.
+
+``` {r}
+scatterplot3d(cirr.x2, cirr.y2, cirr.z2, 
+    main = "3D Scatterplot of Cirrhosis Data Subset Under NMDS",
+    xlab = "NMDS1",
+    ylab = "NMDS2",
+    zlab = "NMDS3",
+    color = colors[factor(cirrsample$Stage)])
+text(fig4, "sites", col = "purple", cex = 1.1)
+legend(5,5,
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    bty = "n",
+    col = colors)
+```
+
+This graph serves a similar purpose to the 3D graph for the complete dataset; by adding another variable, it helps differentiate the variables in the cluster more. Triglycerides are higher up on the third axis, showing that it are more closely associated with higher stage cirrhosis, but not so much as Bilirubin is. While Copper seems to be in the same group as Cholesterol and SGOT, it is more likely that it is in a different area but the angle makes the groups seem to overlap (the downside of not having a movable figure to print on a knitted dataset). However, the 3D model does allow for differentiation between Prothrombin, Albumin, and Platelets across the third axis, and between Cholesterol and SGOT. Overall, the data is more sparse, making any small shift in the data change one variable much more than it would in the larger dataset.
+
+
+## Question 8
+
+We define two different variables from the original dataset as the environmental variables that we will overlay on the different graphs: Age and N_Days. Age is measured in days, and is the age of the patient as of the time the analysis was done on them. N_Days represents the number of days since their last hospital visit. These will be considered as the environmental variables because they are factors that are dependent on the individual, but still some correlation with the stage of cirrhosis and the different factors in the blood that we hope to measure.
+
+``` {r}
+set.seed(20)
+plot(cirrcca, main = "Correspondence Analysis Plot for Cirr. Data", type = "n")
+points(cirrcca, pch = 21, bg = colors[factor(cirrhosis$Stage)], cex = 1.0)
+text(cirrcca, "species", col = "purple", cex = 0.8)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+fit <- envfit(cirrcca, cirrenv, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+
+plot(cirrdca, main = "Detrended Correspondence Analysis Plot for Cirr. Data", 
+    type = "n")
+points(cirrdca, pch = 21, bg = colors[factor(cirrhosis$Stage)], cex = 0.8)
+text(cirrdca, "species", col = "purple", cex = 0.7)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+fit <- envfit(cirrdca, cirrenv, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+
+plot(cirrdca, xlim=c(-1,1), ylim=c(-0.5,0.5), 
+    main = "Detrended CA Plot for Cirr. Data (Closeup)", 
+    type = "n")
+points(cirrdca, pch = 21, bg = colors[factor(cirrhosis$Stage)], cex = 1.2)
+text(cirrdca, "species", col = "purple", cex = 1.0)
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+fit <- envfit(cirrdca, cirrenv, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+```
+
+When looking at the CA plot with the environmental variables, we can see that only N_Days is a significant environmental variable. Since it has a p-value of 0.000999, we reject the null hypothesis that the environmental variable has no correlation with the rows and columns on the plot. On the other hand, Age is not a significant environmental variable because it has a p-value of 0.061938, which means we cannot reject the null hypothesis. Overall, the p-values tell us that N_Days does have a significant correlation with the data, which is reflected in the length of the vectors seen on the graphs.
+
+Looking at the DCA plot, we find that since both p-values are below the threshold of 0.05 (0.000999 and 0.047952, respectively), N_Days and Age both have a statistically significant correlation with the data in the two-way table. Since the p-value is lower for N_Days, it is more significant than Age and has a stronger effect on the data, which is also reflected in the lengths of the vectors. 
+
+What is interesting is that N_Days is in a different direction with respect to the Age vector on the CA and DCA graphs. However, this makes sense when taking into consideration what the data itself is showing in each graph. In both plots, N_Days is in the  opposite direction as the trend for the individuals with Stage 4 cirrhosis, instead pointing in the direction of individuals with a lower stage of cirrhosis. Logically speaking, individuals who have have a higher stage of cirrhosis would need to go to the hospital more often, which is why the N_Days vector points in the opposite direction of those points. Age points roughly in the direction of increasing stage of cirrhosis, which does make sense to some degree, as people who have cirrhosis would likely be older because they have a longer period of time for their liver damage to accumulate (due to alcoholism or disease), which leads to a correlation between age and stage of cirrhosis.
+
+``` {r}
+set.seed(20)
+plot(cirrcca2, main = "Correspondence Analysis Plot for Cirr. Data Subset", 
+    type = "n")
+points(cirrcca2, pch = 21, bg = colors[factor(cirrsample$Stage)], cex = 1.2)
+text(cirrcca2, "species", col = "purple", cex = 0.8)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+fit <- envfit(cirrcca2, cirrenv2, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+
+plot(cirrdca2, main = "Detrended Correspondence Analysis Plot for Cirr. Data Subset", 
+    type = "n")
+points(cirrdca2, pch = 21, bg = colors[factor(cirrsample$Stage)], cex = 0.8)
+text(cirrdca2, "species", col = "purple", cex = 0.7)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+fit <- envfit(cirrdca2, cirrenv2, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+
+plot(cirrdca2, xlim=c(-1,1), ylim=c(-0.5,0.5), 
+    main = "Detrended CA Plot for Cirr. Data Subset (Closeup)", 
+    type = "n")
+points(cirrdca2, pch = 21, bg = colors[factor(cirrsample$Stage)], cex = 1.2)
+text(cirrdca2, "species", col = "purple", cex = 0.9)
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+fit <- envfit(cirrdca2, cirrenv2, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+```
+
+When analyzing the subset of the original dataset, we see that none of the p-values for the environmental vectors (N_Days and Age) for the CA (0.06194 and 0.59341, respectively) nor the DCA (0.08991 and 0.61638, respectively) are significant because they are all above the threshold of 0.05. However, like before, N_Days consistently has a lower p-value than Age, which means that it is still more significant than Age, albeit not enough to be statistically significant with respect to the data.
+
+Generally, the same trend regarding the directions of the Age and N_Days vectors are seen in these graphs when comparing them to the graphs of the original dataset. N_Days is still pointed in the opposite direction of the trend of Stage 4 cirrhosis individuals, and the Age vector is still pointed roughly in the direction of those same points. This makes sense, as taking a subset of the data should not affect how that data is related to the environmental variable vectors. 
+
+``` {r}
+set.seed(20)
+#more refined plot
+fig <- ordiplot(cirrmds, 
+      main = "NMDS Plot for Cirrhosis Data",
+      type = "none", cex = 1.1)
+text(fig, "species", col = "purple", cex = 1.1)
+points(fig, "sites", col = colors[factor(cirrhosis$Stage)], cex = 0.8)
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+fit <- envfit(cirrmds, cirrenv, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+
+#more refined plot
+fig <- ordiplot(cirrmds2, 
+      main = "NMDS Plot for Cirrhosis Data Subset",
+      type = "none", 
+      cex = 1.1)
+text(fig, "species", col = "purple", cex = 1.1)
+points(fig, "sites", col = colors[factor(cirrsample$Stage)], cex = 0.8)
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+fit <- envfit(cirrmds2, cirrenv2, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+```
+
+When looking at the results of the environmental variable overlays on the NMDS plots, we can see that there are differences between the complete dataset and the subset. In general, all of the results are more significant in the complete dataset than in the subset, which can be seen through the p-values, with the p-values for the complete dataset being a lot smaller (0.000999 vs 0.004995 for N_Days, 0.021978 vs 0.612388 for Age). This makes sense, as there is a much higher population size in the first group, meaning that if there is an actual statistically significant effect of the environmental variables, it will have an even lower p-value. 
+
+For the complete dataset, N_Days and Age both have a statistically significant effect on the variables in the dataset as the p-values (0.000999 and 0.021978, respectively) are below the 0.05 threshold. For the subset, however, only N_Days is statistically significant, as it has a p-value of 0.004995. Age has a p-value of 0.612388, which is not close to the significance threshold of 0.05, and is thus not statistically significant.
+
+As in the CA and DCA plots, N_Days is more significant than Age for both the complete and subset datasets, and N_Days is in the opposite direction from the individuals with a higher stage of cirrhosis, and instead points in the direction of people with a lower stage of cirrhosis. Age points generally in the direction of people with a higher level of cirrhosis, which also follows the same line of reasoning used in the analysis of the CA and DCA plots.
+
+``` {r}
+set.seed(20)
+scatterplot3d(cirr.x, cirr.y, cirr.z, 
+    main = "3D Scatterplot of Cirrhosis Data Under NMDS",
+    xlab = "NMDS1",
+    ylab = "NMDS2",
+    zlab = "NMDS3",
+    color = colors[factor(cirrhosis$Stage)])
+text(fig3, "sites", col = "purple", cex = 1.1)
+legend(5,5,
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    bty = "n",
+    col = colors)
+fit <- envfit(cirrmds3, cirrenv, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+
+scatterplot3d(cirr.x2, cirr.y2, cirr.z2, 
+    main = "3D Scatterplot of Cirrhosis Data Subset Under NMDS",
+    xlab = "NMDS1",
+    ylab = "NMDS2",
+    zlab = "NMDS3",
+    color = colors[factor(cirrsample$Stage)])
+text(fig4, "sites", col = "purple", cex = 1.1)
+legend(5,5,
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    bty = "n",
+    col = colors)
+fit <- envfit(cirrmds4, cirrenv2, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+```
+
+When looking at the results of the environmental variable overlays on the 3D NMDS plots, we can emulate a similar analysis to what we did for the two-dimensional plots. As before, all of the results are more significant in the complete dataset than in the subset, which can be seen through the p-values, with the p-values for the complete dataset being a lot smaller (0.000999 vs 0.006993 for N_Days, 0.041958 vs 0.493506 for Age). This makes sense, as there is a much higher population size in the first group, meaning that if there is an actual statistically significant effect of the environmental variables, it will have an even lower p-value. These values, overall, are lower than the p-values from the two-dimensional NMDS plot, which logically makes sense, as increasing the dimensionality of the MDS model makes it more accurate, and makes any overlay of environmental variables more significant.
+
+For the complete dataset, N_Days and Age both have a statistically significant effect on the variables in the dataset as the p-values (0.000999 and 0.041958, respectively) are below the 0.05 threshold. For the subset, however, only N_Days is statistically significant, as it has a p-value of 0.006993. Age has a p-value of 0.493506, which is not close to the significance threshold of 0.05, and is thus not statistically significant.
+
+As in the CA, DCA, and two-dimensional NMDS plots, N_Days is more significant than Age for both the complete and subset datasets, and N_Days is in the opposite direction from the individuals with a higher stage of cirrhosis, and instead points in the direction of people with a lower stage of cirrhosis. Age points generally in the direction of people with a higher level of cirrhosis, which also follows the same line of reasoning used in the analyses from before. This is interesting, as even in three dimensions, the same trends with the data are followed, suggesting that even in higher dimensions the same conclusions can be drawn from the dataset.
+
+When taking all of the CA, DCA, and NMDS plots together, we can make some connections between the trajectory of the environmental variable vectors and the blood factor variables. Generally speaking, N_Days and Age seem to go in opposite directions, so an increase in N_Days would correlate with a decrease in Age, and vice versa. All three of the graphs support the idea that Platelets and Cholesterol are more closely linked to higher number of days between hospital visits and lower age, as the variables tend to be more in the direction of N_Days rather than in the direction of Age. Some graphs, like the complete dataset NMDS plot, suggest that Alkaline Phosphatase levels are correlated with N_Days, but others, like the CA and DCA plots suggest that it is more of an even split between N_Days and Age in terms of which variable has more of an impact on it. Interestingly, the subset NMDS plot suggests that Age has more of an effect on Alkaline Phosphatase levels than N_Days, and instead N_Days is correlated with Albumin and Prothrombin levels (though all of the other graphs seem to disagree). What cannot be denied, though, is that Copper, Bilirubin, and Triglyceride levels are all more correlated with an increase in Age than an increase in N_Days, across the different plots.
+
+```{r}
+cirrmdsBC <- metaMDS(cirrdata)
+fit1 <- envfit(cirrmdsBC ~ N_Days+Age, cirrenv)
+
+#first plot with interpolated surface
+fig <- ordiplot(cirrmdsBC, type = "none", cex = 1.1, 
+    main = "Wireplot for Cirrhosis Data Under NMDS")
+text(fig, "species", col = "purple", cex = 0.7)
+points(fig, "sites", col = colors[factor(cirrhosis$Stage)], cex = 0.7)
+plot(fit1)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+tmp1 <- with(cirrenv, ordisurf(cirrmdsBC, N_Days, add = TRUE))
+tmp2 <- with(cirrenv, ordisurf(cirrmdsBC, Age, add = TRUE, col = "green4"))
+
+fig <- ordiplot(cirrmdsBC, type = "none", cex = 1.1, main = "NMDS for Spider Data")
+text(fig, "species", col = "purple", cex = 0.7)
+plot(fit1)
+tmp1 <- with(cirrenv, ordisurf(cirrmdsBC, N_Days, add = TRUE))
+tmp2 <- with(cirrenv, ordisurf(cirrmdsBC, Age, add = TRUE, col = "green4"))
+
+#plot of functions for BareSand and FallTwig
+vis.gam(tmp1, main = "3D Significance Plot for N_Days in Cirrhosis Data")
+vis.gam(tmp2, main = "3D Significance Plot for Age in Cirrhosis Data")
+```
+
+We can produce wireplots to see the effect of these overlaid environmental variables on the dataset. Wireplots use regression splines to model the relationships between the environmental variables and the ordination plot by describing a surface for each one that the points can be plotted upon. 
+
+The green lines, which represent Age, are non-linear, as evidenced by the circular nature of the regression splines. The 3D heatmap reflects this nature, as there is a very prominent dip in the surface at the center of the graph. As the surface starts reaching the corners, the plot becomes more and more of a linear predictor, which is reflected in the more linear nature of the green lines as they trend outward from the center. 
+
+The red lines, which represent N_Days, are still non-linear, albeit less so. The 3D heatmap is much more linear than the one for age, which makes sense as the red regression splines appear a lot more linear than the green curves; however, the curvature of the red lines is reflected in the slight dip of the 3D plot. 
+
+Looking at the points on the wireplots and the stage they are in, it seems as though an increase in Age tends to lead to an increase in the stage of cirrhosis, but the correlation is not as strong as the relationship between N_Days and the stage. As N_Days increases across the regression splines, the stage of cirrhosis tends to decrease, with Stage 4 at the top left and quickly decreasing wire by wire. This is representative of how the p-values and significance of the N_Days vector was always lower and more significant than that of the Age vector.
+
+```{r}
+cirrmdsBC2 <- metaMDS(cirrdata2)
+fit2 <- envfit(cirrmdsBC2 ~ N_Days+Age, cirrenv2)
+
+#first plot with interpolated surface
+fig2 <- ordiplot(cirrmdsBC2, type = "none", cex = 1.1, main = "NMDS for Cirr. Subset Data")
+text(fig2, "species", col = "purple", cex = 0.7)
+points(fig2, "sites", col = colors[factor(cirrsample$Stage)], cex = 0.7)
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+plot(fit2)
+tmp3 <- with(cirrenv2, ordisurf(cirrmdsBC2, N_Days, add = TRUE))
+tmp4 <- with(cirrenv2, ordisurf(cirrmdsBC2, Age, add = TRUE, col = "green4"))
+
+fig2 <- ordiplot(cirrmdsBC2, type = "none", cex = 1.1, main = "NMDS for Cirr. Subset Data")
+text(fig2, "species", col = "purple", cex = 0.7)
+plot(fit2)
+tmp3 <- with(cirrenv2, ordisurf(cirrmdsBC2, N_Days, add = TRUE))
+tmp4 <- with(cirrenv2, ordisurf(cirrmdsBC2, Age, add = TRUE, col = "green4"))
+
+#plot of functions for BareSand and FallTwig
+vis.gam(tmp3, main = "3D Significance Plot for N_Days in Cirrhosis Data Subset")
+vis.gam(tmp4, main = "3D Significance Plot for Age in Cirrhosis Data Subset")
+```
+
+For the subset, we have significant differences in how the wireplots and 3D surfaces look.
+
+The green lines, which represent Age, are still non-linear, as evidenced by the curvature of the regression splines. However, their curvature is less circular than in the complete dataset. The 3D heatmap reflects this difference, as the dip in the surface is a lot less pronounced. as the surface starts reaching the corners (especially the bottom left), the plot becomes more and more of a linear predictor, which is reflected in the more linear nature of the green lines. The red lines, which represent N_Days, seems to be pretty much linear, which reflected by the completely planar nature of the 3D surface. 
+
+Looking at the points on the wireplots and the stage they are in, it seems as though (similar to before) an increase in Age tends to lead to an increase in the stage of cirrhosis, but the correlation is not as strong as the relationship between N_Days and the stage. As N_Days increases across the regression splines, the stage of cirrhosis tends to decrease, with Stage 4 at the bottom left and decreasing as it moves to the top right. This is also representative of how the p-values and significance of the N_Days vector was always lower and more significant than that of the Age vector. However, it seems like the sample size has a major effect, just like it does on PCA, as the plots are more linear for both environmental variables in the subset analysis. 
+
+## Question 9
+
+``` {r}
+set.seed(20)
+cirrcca <- cca(cirrdata, cirrenv, scale = "FALSE")
+plot(cirrcca, main = "Canonical Correspondence Analysis Plot for Cirr. Data", 
+    type = "n")
+text(cirrcca, display = c("sites"), labels = rownames(cirrhosis$Stage), cex = 1.6)
+points(cirrcca, pch = 19, col = colors[factor(cirrhosis$Stage)], cex = 0.8)
+text(cirrcca, display = c("species"), col = "purple", cex = 1.1)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+#add environmental variables
+fit <- envfit(cirrcca, cirrenv, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+
+#get summary information
+summary(cirrcca)
+```
+
+Interestingly, the graph looks very similar in design to the CA graph, which is likely because the two environmental variables did not have much of an effect on the analysis. The first two CCA directions only explain a proportion of 0.055526 and 0.006992 of the scaled Chi-square, and thus the variation in the entire dataset. This means that they explain a total of 0.062519 of the variation, which suggests that a CCA plot will not be able to show much differentiation between the different variables and the individuals. The plot supports this, as most of the data is tightly clustered around the origin, and all of the variables are overlapped at the origin too. There is not enough differentiating power in either of the CCA axes to interpret the results of this data. 
+
+We can still see that the data generally is separated by the second CCA axis by the stage of cirrhosis; moving down the axis, the stage of cirrhosis tends to get lower. We can also see by the plot that CCA1 has a much larger effect on N_Days than it does on Age, which is reflected in the biplot scores; N_Days has a biplot score of 0.99736 for CCA1 while Age has a biplot score of 0.01377, meaning that CCA1 will have a much stronger impact on N_Days. Similarly, CCA2 has an even lower impact on N_Days, and a very strong impact on Age, as N_Days has a biplot score of -0.07265 while Age has a biplot score of 0.99991. Looking at the absolute values we can tell generally how strong each relationship in each direction will be.
+
+For the complete dataset, N_Days and Age both have a statistically significant effect on the variables when analyzed through CCA as the p-values (0.000999 and 0.021978, respectively) are below the 0.05 threshold. This means that even though the axes are not good at differentiating between the variables, they have a statistically significant relationship with the environmental variables themselves. As explained in the interpretations from the plots from before, Age is in the direction of the higher stages of cirrhosis, while N_Days is in the opposite direction, which is reflective of the nature of individuals with higher stages of cirrhosis (they tend to be older and need to visit the hospital more often).
+
+``` {r}
+set.seed(20)
+cirrcca2 <- cca(cirrdata2, cirrenv2, scale = "FALSE")
+plot(cirrcca2, main = "Canonical Correspondence Analysis Plot for Cirr. Data Subset", 
+    type = "n")
+points(cirrcca2, pch = 19, col = colors[factor(cirrsample$Stage)], cex = 1)
+text(cirrcca2, "species", col = "purple", cex = 1.1)
+legend("topright",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+#add environmental variables
+fit <- envfit(cirrcca2, cirrenv2, permutations = 1000)
+plot(fit, col = "black", lwd = 3)
+fit
+
+#get summary information
+summary(cirrcca2)
+```
+
+We run into similar situations/problems in the analysis with the subset. The first two CCA directions only explain a proportion of 0.038568 and 0.012290 of the scaled Chi-square, and thus the variation in the entire dataset. This means that they explain a total of 0.050859 of the variation, which suggests that a CCA plot will not be able to show much differentiation between the different variables and the subset of individuals. The plot supports this, as although the data is spread apart around the origin, all of the variables are overlapped at the origin. There is not enough differentiating power in either of the CCA axes to interpret the results of this data.
+
+We can see that the data of the individuals generally is separated by both CCA axes, giving a plot reminiscent of the CA plot of the subset of individuals; on one diagonal, we have a high number of people with high stage of cirrhosis, and lower stages in the other direction. We can also see by the plot that similar to the complete dataset, CCA1 has a much larger effect on N_Days than it does on Age, which is reflected in the biplot scores; N_Days has a biplot score of -0.9478 for CCA1 while Age has a biplot score of 0.1624, meaning that CCA1 will have a much stronger impact on N_Days. Similarly, CCA2 has a low impact on N_Days, and a very strong impact on Age, as N_Days has a biplot score of -0.3190 while Age has a biplot score of 0.9867.
+
+For the subset of the complete dataset, neither N_Days and Age both have a statistically significant effect on the variables when analyzed through CCA as the p-values (0.06893 and 0.35964, respectively) are above the 0.05 threshold. As explained in the interpretations from the plots from before, and seen in the previous CCA plot, Age is in the direction of the higher stages of cirrhosis, while N_Days is in the opposite direction, which is reflective of the nature of individuals with higher stages of cirrhosis (they tend to be older and need to visit the hospital more often).
+
+## Question 10
+
+Overall, we ran many different plots to try and understand the relationship between stage of cirrhosis and different blood factors, as well as the effect of environmental variables on the data itself. Since we hope to find the most effective plots to analyze the data, we will restrict our analysis to the plots used in Questions 8 and 9, which incorporate the environmental variables into the study and determine how they have a relationship with the dataset itself. Additionally, since most of the graphs (except for the CCA) have a 3D plot that goes with the standard 2D plot, we will group them together for the sake of explanation.
+
+The CA and DCA plots allow us to see several things: First, we can tell quite effectively the snaking in the model. There is an obvious trend that moves from high-stage cirrhosis to low-stage cirrhosis that works in multiple dimensions, which can be seen in the CA and DCA plots. The main issue, however, is that even though the DCA is able to separate the variables, they both suffer from excessive clustering of the data. In the CA, all of the variables are so clustered together that there is no way to differentiate between them, while in the DCA, the variables are so far away that it is hard to make detailed conclusions between the clustered individuals and the associated variables.
+
+The NMDS plots allow us to understand all that the CA and DCA provide, and more. We get to see the same trends of clustering in the lower stages of cirrhosis, and trends of high variation away from that major cluster for people with higher stage cirrhosis (stages 3 and 4), which is similar to the snaking we see in the earlier plots. However, these graphs are a lot easier to read, with more spread across the different individuals and variables. This allows us to better understand and make conclusions about the trends in the data. A 2D graph is sufficient for understanding the data through an MDS model, but a 3D plot gives even more context to analyze. We can take the MDS plots further than all of the other analyses, as we can draw wireplots and understand the surfaces through which the environmental variables have an effect on the data. 
+
+The CCA plots, however, seem to be the weakest of the plots used. Not only is there no flexibility to add unique plots or 3D graphs, but all of the variables are clustered together in one region, and the individuals are crammed together in one vertical stretch. The only major conclusions that can be drawn are on the trends of moving between the different stages, and the effects of the environmental variables on the data. However, insofar as the other graphs can serve the same purpose, this style of plots is least conducive to a strong analysis with this dataset.
+
+In conclusion, we can draw many interesting conclusions about the nature of cirrhosis. First, we can conclude that some variables are more likely correlated with different stages of cirrhosis. Copper and Bilirubin are more closely related with Stage 4 of cirrhosis, while the other variables tend to be related to earlier stages of cirrhosis. Depending on the model that is used, there is a different interpretation of which specific variables are correlated with which stage. Scientific literature supports these trends. In early liver damage, there is scarring and damage of the liver tissue that would allow for the formation of proteins like albumin or the conversion of things like prothrombin, which is why these types of factors are more correlated with early stages of cirrhosis. In end-stage cirrhosis, however, the liver loses complete function, including the ability to remove toxins in the body, which is why factors like bilirubin and copper are not able to be removed (and thus why there is a high correlation between Stage 4 cirrhosis and these factors).
+
+We can also make conclusions about the effect of environmental variables on the data; Age has a relationship with a higher stage in cirrhosis, meaning that as age increases, it is more likely that the individual also has a higher stage of cirrhosis. N_Days, or the number of days since the person last visited the hospital, has the opposite relationship, which also makes sense; if a person does not have damaging liver failure, they will be less likely to need to go to the hospital as often.
+
+## Appendix 1: Inability to Use Transformed Data
+
+``` {r}
+#transformations
+cirrhosis2 <- cirrhosis
+cirrhosis2[11] = log(cirrhosis[11])
+cirrhosis2[12] = log(cirrhosis[12])
+cirrhosis2[13] = (cirrhosis[13])^2
+cirrhosis2[14] = log(cirrhosis[14])
+cirrhosis2[15] = log(cirrhosis[15])
+cirrhosis2[16] = log(cirrhosis[16])
+cirrhosis2[17] = log(cirrhosis[17])
+cirrhosis2[19] = log(cirrhosis[19])
+
+#transformed qqplots
+qqPlot(cirrhosis2$Bilirubin, col= colors[factor(cirrhosis2$Stage)],pch=16,
+    main = "QQ-Plot for Transformed Bilirubin Data",
+    ylab = "Bilirubin Level")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis2$Cholesterol, col= colors[factor(cirrhosis2$Stage)],pch=16,
+    main = "QQ-Plot for Transformed Cholestrol Data",
+    ylab = "Serum Cholesterol Level")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis2$Albumin, col= colors[factor(cirrhosis2$Stage)],pch=16,
+    main = "QQ-Plot for Transformed Albumin Data",
+    ylab = "Albumin Level")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis2$Copper, col= colors[factor(cirrhosis2$Stage)],pch=16,
+    main = "QQ-Plot for Transformed Copper Data",
+    ylab = "Urine Copper Level")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis2$Alk_Phos, col= colors[factor(cirrhosis2$Stage)],pch=16,
+    main = "QQ-Plot for Transformed Alkaline Phosphatase Data",
+    ylab = "Alkaline Phosphatase Level")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis2$SGOT, col= colors[factor(cirrhosis2$Stage)],pch=16,
+    main = "QQ-Plot for Transformed SGOT Data",
+    ylab = "SGOT Level")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis2$Tryglicerides, col= colors[factor(cirrhosis2$Stage)],pch=16,
+    main = "QQ-Plot for Transformed Triglycerides Data",
+    ylab = "Trigliderides Level")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis2$Platelets, col= colors[factor(cirrhosis2$Stage)],pch=16,
+    main = "QQ-Plot for Transformed Platelets Data",
+    ylab = "Platelets Level")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+qqPlot(cirrhosis2$Prothrombin, col= colors[factor(cirrhosis2$Stage)],pch=16,
+    main = "QQ-Plot for Transformed Prothrombin Data",
+    ylab = "Prothrombin Time")
+legend("topleft",
+    legend = c("Stage 1", "Stage 2", "Stage 3", "Stage 4"),
+    xpd = TRUE,
+    pch = 19,
+    col = colors)
+
+#transformed chi-square plots
+cqplot(cirrhosis2[c("Bilirubin", 
+      "Cholesterol", "Albumin", "Copper", "Alk_Phos", "SGOT", "Tryglicerides", 
+      "Platelets", "Prothrombin")], 
+      main = "Chi-Square Plot of Transformed Data")
+```
+
+``` {r}
+results <- matrix(NA, 21, 3)
+cirrdata3 <- cirrhosis2[, 11:19]
+# #j is number of dimensions to try
+for (j in 1:3){
+   for (i in 1:20){
+     temp <- cirrdata3[shuffle(nrow(cirrdata3)), 1]
+     for (k in 2:12) {temp <- cbind(temp, cirrdata[shuffle(nrow(cirrdata3)), k]) }
+     #store stress
+     results[i, j] <- metaMDS(temp, k = j, distance = "euclidean")$stress
+   }
+   results[21, j] <- metaMDS(cirrdata3, k = j, distance = "euclidean")$stress
+ }
+```
+
+``` {r}
+
+ plot(c(1:3), results[21, ], type = "b", col = "blue", lwd = 3,
+      ylim = c(0, max(results)), xlab = "Dimensions", ylab = "Stress", pch = 19,
+      main = "MDS for Transformed Cirr. Data, Euclidean Distance")
+ mins <- apply(results[1:20, ], 2, min)
+ maxs <- apply(results[1:20, ], 2, max)
+ meds <- apply(results[1:20, ], 2, median)
+
+ for (i in 1:5){
+     points(rep(i, 3), c(mins[i], meds[i], maxs[i]), type = "b", col = "red", 
+         lwd = 3, pch = 19)
+ }
+ legend(3.5, (.9*max(results)), c("MDS Solution", "20 Permutations"), 
+     lwd = 3, col = c("blue", "red"))
+```
+
+The stress values are so low that there is basically no reason to run an analysis on transformed data.
+
+``` {r}
+#two dimensional solution
+cirrmdsT <- metaMDS(cirrdata3, k = 2, distance = "euclidean")
+
+#quick plot
+plot(cirrmdsT, type = "t")
+
+#more refined plot
+fig <- ordiplot(cirrmdsT, type = "none", cex = 1.1)
+points(fig, "sites", col = colors[factor(cirrhosis2$Stage)], cex = 0.8)
+
+cirrenvT <- cirrhosis2[, c(2,5)]
+fit <- envfit(cirrmdsT, cirrenvT, permutations = 1000)
+plot(fit, col = "black", lwd = 3, main = "NMDS Plot for Transformed Data")
+fit
+```
+
+Clearly, there is no constructive analysis that can be made on this data/plot.

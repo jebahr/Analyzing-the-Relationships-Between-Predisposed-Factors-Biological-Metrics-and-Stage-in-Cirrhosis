@@ -1,0 +1,54 @@
+---
+title: "S&DS 363 Homework 4"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+date: "March 9th, 2023"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn=-1)
+```
+Names: Dinesh Bojja and Jonah Bahr
+
+S&DS 363: Homework 4 MANOVA
+
+## Libraries:
+```{r}
+library(MASS)
+library(biotools)
+library(klaR)
+library(car)
+```
+
+## Preliminaries:
+```{r}
+#color palettes
+colors <- c("#ff2d00",
+            "#66BD63",
+            "#0026ff",
+            "#FDAE61",
+            "#D9EF8B",
+            "#ffc500",
+            "#e800ff",
+            "#00b2ff",
+            "#9700ff",
+            "#7c0a62"
+)
+
+#download dataset
+abalone <- read.csv("abalone.txt", header = TRUE)
+abalone$sex = as.factor(abalone$sex)
+head(abalone)
+names(abalone)
+```
+
+This data set describes physical traits of 4177 different abalones, a type of sea mollusk. These traits include its gender (as either male, female, or infant), height, length, diameter, various types of weights, and ring size (which is indicative of the mollusks's age). 
+
+## Question 1
+
+```{r}
+
+```
